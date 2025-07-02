@@ -5,7 +5,7 @@ Holds a class for storing MLP-related activations at a single layer & step.
 """
 
 import torch
-from activation_recorder.structures.ModelInformation import ModelInformation
+from src.activation_recorder.ModelInformation import ModelInformation
 
 class MLPLayerActivations:
     """

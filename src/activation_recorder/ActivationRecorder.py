@@ -13,13 +13,13 @@ import torch
 from typing import List, Optional
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
-from activation_recorder.structures.ModelInformation import ModelInformation
-from activation_recorder.structures.MultiPromptActivations import MultiPromptActivations
+from src.activation_recorder.ModelInformation import ModelInformation
+from src.activation_recorder.MultiPromptActivations import MultiPromptActivations
 
 # Sub-structures we'll fill from hooks
-from activation_recorder.structures.modules.AttentionLayerActivations import AttentionHeadActivations
-from activation_recorder.structures.modules.MLPLayerActivations import MLPLayerActivations
-from activation_recorder.structures.modules.MoELayerActivations import MoEExpertActivations
+from src.activation_recorder.modules import AttentionHeadActivations
+from src.activation_recorder.modules import MLPLayerActivations
+from src.activation_recorder.modules import MoEExpertActivations
 
 
 class ActivationRecorder:
@@ -66,10 +66,10 @@ class ActivationRecorder:
             if name.endswith("self_attn"):  # High-level attention module
                 h = module.register_forward_hook(self._attention_hook_fn)
                 self._hooks.append(h)
-            elif name.endswith("mlp"):  # High-level MLP module
-                h = module.register_forward_hook(self._mlp_hook_fn)
-                self._hooks.append(h)
-            elif name.endswith("moe"):  # If MoE exists in this model
+            # elif name.endswith("mlp"):  # High-level MLP module
+            #     h = module.register_forward_hook(self._mlp_hook_fn)
+            #     self._hooks.append(h)
+            elif name.endswith("mlp"):  # If MoE exists in this model
                 h = module.register_forward_hook(self._moe_hook_fn)
                 self._hooks.append(h)
         # 2) A single hook on the entire model to keep track of the step index
@@ -236,26 +236,38 @@ class ActivationRecorder:
         Hook function capturing MoE submodule outputs. We create a MoEExpertActivations
         and attach it to the correct place in the bottom-up structure.
         """
-        if self._current_prompt_id is None:
+        is_moe_layer = hasattr(module, 'experts')
+        layer_idx = self._extract_layer_index(module)
+        print(f'Hook for {module.__class__.__name__} layer {layer_idx} which is_moe_layer={is_moe_layer}, captured the following module output: {len(module_output)}')
+        if self._current_prompt_id is None or not is_moe_layer:
             return
 
-        dummy_expert = MoEExpertActivations(
-            expert_index=0,
-            x_prime=torch.zeros(4),
-            x_double_prime=torch.zeros(4),
-            beta=0.5,
-            y=torch.zeros(4),
-            model_info=self.model_info
-        )
+        _, activations = module_output
 
-        prompt_acts = self.multi_prompt_acts.get_or_create_prompt_activations(
-            self._current_prompt_id, self._current_prompt_text
-        )
-        step_acts = prompt_acts.get_or_create_step_activations(self._current_step_index)
-        layer_idx = self._extract_layer_index(module)
-        layer_acts = step_acts.get_or_create_layer_activations(layer_idx)
-        moe = layer_acts.get_or_create_moe()
-        moe.add_expert_activations(dummy_expert)
+        for key, value in activations.items():
+            if hasattr(value, 'shape'):
+                print(f'{key} shape: {value.shape}')
+        print('---')
+        
+        assert layer_idx == activations['layer_idx'], f'Layer index mismatch: {layer_idx} != {activations["layer_idx"]}'
+
+        # Walk up the chain
+        prompt_acts = self.multi_prompt_acts.get_or_create_prompt_activations(self._current_prompt_id, self._current_prompt_text)
+        model_acts = prompt_acts.get_or_create_step_activations(self._current_step_index)
+        layer_acts = model_acts.get_or_create_layer_activations(layer_idx)
+        moe_layer = layer_acts.get_or_create_moe()
+        
+        # Remove prompt tokens from activations if present
+        # if self._includes_prompt_activations(activations):
+        #     print('Removing prompt tokens from activations')
+        #     activations = self._remove_prompt_activations(activations)            
+        
+        # Create head activations
+        for moe_idx in range(self.model_info.num_experts_per_tok):
+            # head_activations = self._create_head_activations(activations, head_idx)
+            expert_activations = MoEExpertActivations()
+            print(f"MoE expert {moe_idx} activations captured: {expert_activations}")
+            moe_layer.add_expert_activations(expert_activations)
 
     def _extract_layer_index(self, module) -> int:
         """

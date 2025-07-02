@@ -5,8 +5,8 @@ Represents the activations for a single prompt across multiple steps.
 """
 
 from typing import Dict
-from activation_recorder.structures.ModelInformation import ModelInformation
-from activation_recorder.structures.ModelActivations import ModelActivations
+from src.activation_recorder.ModelInformation import ModelInformation
+from src. activation_recorder.ModelActivations import ModelActivations
 
 class PromptActivations:
     """

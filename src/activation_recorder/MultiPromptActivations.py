@@ -8,8 +8,8 @@ Each prompt has its own PromptActivations object.
 from __future__ import annotations
 import os, pickle
 from typing import Dict
-from activation_recorder.structures.PromptActivations import PromptActivations
-from activation_recorder.structures.ModelInformation import ModelInformation
+from src.activation_recorder.PromptActivations import PromptActivations
+from src.activation_recorder.ModelInformation import ModelInformation
 
 class MultiPromptActivations:
     """

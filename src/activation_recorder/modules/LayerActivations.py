@@ -6,16 +6,10 @@ Can contain attention, MLP, and MoE structures.
 """
 
 from typing import Optional
-from activation_recorder.structures.modules.AttentionLayerActivations import (
-    AttentionLayerActivations
-)
-from activation_recorder.structures.modules.MLPLayerActivations import (
-    MLPLayerActivations
-)
-from activation_recorder.structures.modules.MoELayerActivations import (
-    MoELayerActivations
-)
-from activation_recorder.structures.ModelInformation import ModelInformation
+from src.activation_recorder.modules.AttentionLayerActivations import AttentionLayerActivations
+from src.activation_recorder.modules.MLPLayerActivations import MLPLayerActivations
+from src.activation_recorder.modules.MoELayerActivations import MoELayerActivations
+from src.activation_recorder.ModelInformation import ModelInformation
 
 class LayerActivations:
     """

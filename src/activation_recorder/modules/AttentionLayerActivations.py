@@ -6,7 +6,7 @@ and an attention container for a single layer & step.
 """
 
 import torch
-from activation_recorder.structures.ModelInformation import ModelInformation
+from src.activation_recorder.ModelInformation import ModelInformation
 
 class AttentionHeadActivations:
     """

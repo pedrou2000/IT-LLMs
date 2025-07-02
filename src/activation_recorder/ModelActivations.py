@@ -6,8 +6,8 @@ split across multiple layers.
 """
 
 from typing import Dict
-from activation_recorder.structures.modules.LayerActivations import LayerActivations
-from activation_recorder.structures.ModelInformation import ModelInformation
+from src.activation_recorder.modules import LayerActivations
+from src.activation_recorder.ModelInformation import ModelInformation
 
 class ModelActivations:
     """

@@ -57,7 +57,16 @@ class ModelInformation:
         if hasattr(hf_model.config, "head_dim"):
             self.head_dim: int = hf_model.config.head_dim
         elif hasattr(hf_model.config, "v_head_dim"):
-            self.head_dim: int = hf_model.config.v_head_dim
+            self.head_dim: int = hf_model.config.v_head_dim 
+        
+        # MoE Stuff
+        if hasattr(hf_model.config, "n_routed_experts"):
+            self.n_routed_experts: int = hf_model.config.n_routed_experts
+        if hasattr(hf_model.config, "n_shared_experts"):
+            self.n_shared_experts: int = hf_model.config.n_shared_experts
+        if hasattr(hf_model.config, "num_experts_per_tok"):
+            self.num_experts_per_tok: int = hf_model.config.num_experts_per_tok
+        
 
         # If your model config has an attribute for attention implementation
         self.attention_implementation: str = getattr(hf_model.config, "attn_implementation", "default")

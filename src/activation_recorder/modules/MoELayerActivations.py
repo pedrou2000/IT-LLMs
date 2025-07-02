@@ -7,7 +7,7 @@ including gating info and per-expert data.
 
 import torch
 from typing import Dict
-from activation_recorder.structures.ModelInformation import ModelInformation
+from src.activation_recorder.ModelInformation import ModelInformation
 
 class MoEExpertActivations:
     """

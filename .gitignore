@@ -32,3 +32,5 @@ htmlcov/
 
 # Environment variable files
 .env
+
+data/

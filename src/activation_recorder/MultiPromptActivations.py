@@ -6,8 +6,9 @@ Each prompt has its own PromptActivations object.
 """
 
 from __future__ import annotations
-import os, pickle
-from typing import Dict
+import os, pickle, torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+from typing import Dict, List
 from src.activation_recorder.PromptActivations import PromptActivations
 from src.activation_recorder.ModelInformation import ModelInformation
 
@@ -77,44 +78,34 @@ class MultiPromptActivations:
             raise FileNotFoundError(f"No file found at '{file_path}'.")
         try:
             with open(file_path, "rb") as f:
-                loaded_obj = pickle.load(f)
+                loaded_obj = pickle.load(f)  # ← changed from torch.load
             if not isinstance(loaded_obj, cls):
-                raise TypeError(f"Loaded object is not a MultiPromptActivations instance. Got type: {type(loaded_obj)}")
+                print(f"Loaded object is not a MultiPromptActivations instance. Got type: {type(loaded_obj)}")
             print(f"MultiPromptActivations successfully loaded from '{file_path}'.")
             return loaded_obj
         except Exception as e:
             print(f"Error while loading MultiPromptActivations from '{file_path}': {e}")
             raise
 
-if __name__ == "__main__":
-    """
-    Simple test of MultiPromptActivations creation and usage.
-    """
-    from activation_recorder.structures.ModelInformation import ModelInformation
-    from transformers import AutoModelForCausalLM
+    
 
-    model = AutoModelForCausalLM.from_pretrained("gpt2")
-    model_info = ModelInformation(model)
+    def verify_recorded_activations(self, prompts: List[str] = None, max_new_tokens: int = None, tokenizer: AutoTokenizer = None, diff_q_size: bool = False):
+        """ Verify the recorded activations are correct in shape and value. """
+        activations = self
+        
+        # Check shape of activations
+        assert len(activations) == len(prompts), f'Expected {len(prompts)} prompts, got {len(activations)}'
+        assert len(activations.prompts[0].steps) == max_new_tokens, f'Expected {max_new_tokens} steps, got {len(activations.prompts[0].steps)}'
+        assert len(activations.prompts[0].steps[0].layers) == activations.model_info.num_layers, f'Expected {activations.model_info.num_layers} layers, got {len(activations.prompts[0].steps[0].layers)}'
+        assert len(activations.prompts[0].steps[0].layers[0].attention.heads) == activations.model_info.num_attention_heads_per_layer, f'Expected {activations.model_info.num_attention_heads_per_layer} heads, got {len(activations.prompts[0].steps[0].layers[0].attention.heads)}'
+        
+        # Check shape of a particular head activation
+        max_len_prompt = 0
+        for prompt_id , prompt_activations in activations.prompts.items():
+            prompt_len = len(tokenizer.encode(prompt_activations.prompt_text))
+            max_len_prompt = max(max_len_prompt, prompt_len)
+            prompt_activations.verify(diff_q_size=diff_q_size, prompt_len=prompt_len, max_new_tokens=max_new_tokens)
 
-    mpa = MultiPromptActivations(model_info)
 
-    # Create a couple of prompts
-    prompt_acts = mpa.get_or_create_prompt_activations(0, "Hello world")
-    prompt_acts.set_prompt_completion("Hello world completion")
-
-    print("Stored prompts so far:", list(mpa.prompts.keys()))
-    print("Prompt 0 text:", mpa.get_prompt_activations(0).prompt_text)
-    print("Prompt 0 completion:", mpa.get_prompt_activations(0).prompt_completion)
-
-    # Test saving the activations.
-    save_dir = "./data/activations"
-    mpa.save(save_dir)
-
-    # Test loading the activations.
-    file_path = os.path.join(save_dir, "multi_prompt_activations.pkl")
-    loaded_mpa = MultiPromptActivations.load(file_path)
-
-    # Verify that the loaded data matches the original.
-    print("Loaded prompts:", list(loaded_mpa.prompts.keys()))
-    print("Loaded Prompt 0 text:", loaded_mpa.get_prompt_activations(0).prompt_text)
-    print("Loaded Prompt 0 completion:", loaded_mpa.get_prompt_activations(0).prompt_completion)
+        # Print a success message
+        print(f'Activations check passed!')

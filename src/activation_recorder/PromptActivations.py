@@ -47,6 +47,11 @@ class PromptActivations:
         """
         self.prompt_completion = completion
     
+    def verify(self, diff_q_size: bool = False, prompt_len: int = 0, max_new_tokens: int = 0):
+        """ Verify the recorded activations for this prompt. Checks shapes and values of activations across all steps. """
+        for step_index, step_activations in self.steps.items():
+            step_activations.verify(diff_q_size, prompt_len, step_index, max_new_tokens)
+    
     
 
 

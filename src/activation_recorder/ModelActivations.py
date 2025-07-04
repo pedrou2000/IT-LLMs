@@ -42,6 +42,11 @@ class ModelActivations:
     
     def is_complete(self):
         return len(self) == self.model_info.num_layers
+    
+    def verify(self, diff_q_size: bool = False, prompt_len: int = 0, step_id: int = 0, max_new_tokens: int = 0):
+        """ Verify the recorded activations for all layers. Checks shapes and values of attention and MLP activations. """
+        for layer_index, layer in self.layers.items():
+            layer.verify(diff_q_size, prompt_len, step_id, max_new_tokens)
 
 
 

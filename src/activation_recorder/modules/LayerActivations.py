@@ -33,33 +33,31 @@ class LayerActivations:
 
     def get_or_create_attention(self) -> AttentionLayerActivations:
         if self.attention is None:
-            self.attention = AttentionLayerActivations(self.model_info)
+            self.attention = AttentionLayerActivations(self.model_info, self.layer_index)
         return self.attention
 
     def get_or_create_mlp(self) -> MLPLayerActivations:
         if self.mlp is None:
-            self.mlp = MLPLayerActivations(self.model_info)
+            self.mlp = MLPLayerActivations(self.model_info, self.layer_index)
         return self.mlp
 
     def get_or_create_moe(self) -> MoELayerActivations:
         if self.moe is None:
-            self.moe = MoELayerActivations(self.model_info)
+            self.moe = MoELayerActivations(self.model_info, self.layer_index)
         return self.moe
-
-    def set_attention(self, attn: AttentionLayerActivations):
-        self.attention = attn
-
-    def set_mlp(self, mlp_acts: MLPLayerActivations):
-        self.mlp = mlp_acts
-
-    def set_moe(self, moe_acts: MoELayerActivations):
-        self.moe = moe_acts
     
     def __len__(self):
         return len(self.attention)
     
     def is_complete(self):
         return len(self.attention) == self.model_info.num_attention_heads_per_layer
+
+    def verify(self, diff_q_size: bool = False, prompt_len: int = 0, step_id: int = 0, max_new_tokens: int = 0):
+        """ Verify the recorded activations for this layer. Checks shapes and values of attention and MLP activations."""
+        if self.attention:
+            self.attention.verify(diff_q_size, prompt_len, step_id, max_new_tokens)
+        if self.moe:
+            self.moe.verify(diff_q_size, prompt_len, step_id, max_new_tokens)
 
 if __name__ == "__main__":
     """

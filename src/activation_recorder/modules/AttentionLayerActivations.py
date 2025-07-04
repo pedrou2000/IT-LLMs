@@ -7,7 +7,7 @@ and an attention container for a single layer & step.
 
 import torch
 from typing import Dict
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 
 class AttentionHeadActivations:
     """
@@ -64,6 +64,11 @@ class AttentionLayerActivations:
         self.model_info = model_info
         self.layer_index = layer_index
         self.heads: Dict[int, AttentionHeadActivations] = {}
+    
+    @property 
+    def nodes(self) -> Dict[int, AttentionHeadActivations]:
+        """ Return the dictionary of head activations. """
+        return self.heads
 
     def add_head_activations(self, head_acts: AttentionHeadActivations):
         idx = head_acts.head_index

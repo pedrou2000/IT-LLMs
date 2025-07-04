@@ -5,7 +5,7 @@ Represents the activations for a single prompt across multiple steps.
 """
 
 from typing import Dict
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 from src. activation_recorder.ModelActivations import ModelActivations
 
 class PromptActivations:
@@ -14,7 +14,7 @@ class PromptActivations:
     Each step is represented by a ModelActivations object.
     """
 
-    def __init__(self, prompt_id: int, prompt_text: str, model_info: ModelInformation):
+    def __init__(self, prompt_id: int, prompt_text: str, completion_text: str = None, completion_tokens: list = None, model_info: ModelInformation = None):
         """
         :param prompt_id: An integer or unique identifier for the prompt
         :param prompt_text: The initial text for this prompt
@@ -22,17 +22,27 @@ class PromptActivations:
         """
         self.prompt_id = prompt_id
         self.prompt_text = prompt_text
+        self.completion_text = completion_text  # Optional, can be set later
+        self.completion_tokens = completion_tokens
         self.model_info = model_info
 
         self.steps: Dict[int, ModelActivations] = {}
+        self.generated_tokens: Dict[int, str] = {i: completion_token for i, completion_token in enumerate(completion_tokens)} if completion_tokens else {}
         self.prompt_completion = None
+    
+    def set_completion_tokens(self, completion_tokens: list):
+        """
+        Set the completion tokens for this prompt.
+        """
+        self.completion_tokens = completion_tokens
+        self.generated_tokens = {i: token for i, token in enumerate(completion_tokens)} if completion_tokens else {}
 
     def get_or_create_step_activations(self, step_index: int) -> ModelActivations:
         """
         Retrieve or create the ModelActivations for a particular step index.
         """
         if step_index not in self.steps:
-            self.steps[step_index] = ModelActivations(step_index, self.model_info)
+            self.steps[step_index] = ModelActivations(step_index, self.model_info, completion_token=self.generated_tokens.get(step_index, None))
         return self.steps[step_index]
 
     def get_step_activations(self, step_index: int) -> ModelActivations:

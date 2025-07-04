@@ -14,7 +14,7 @@ from typing import List, Optional
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from IPython.core.debugger import Pdb
 
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 from src.activation_recorder.MultiPromptActivations import MultiPromptActivations
 
 # Sub-structures we'll fill from hooks
@@ -121,9 +121,12 @@ class ActivationRecorder:
 
             # We only have the final completion text. Each incremental step is done internally.
             completion_text = self.tokenizer.decode(outputs.sequences[0], skip_special_tokens=True)
+            prompt_len = len(self.tokenizer(prompt_text)['input_ids'])
+            completion_tokens = [self.tokenizer.decode(token_id, skip_special_tokens=False) for token_id in outputs.sequences[0]][prompt_len:]  # Get only the new tokens generated
 
             # Store the final completion
-            prompt_acts = self.multi_prompt_acts.get_or_create_prompt_activations(prompt_id, prompt_text)
+            prompt_acts = self.multi_prompt_acts.get_or_create_prompt_activations(prompt_id, prompt_text, completion_text, completion_tokens=completion_tokens)
+            prompt_acts.set_completion_tokens(completion_tokens)
             prompt_acts.set_prompt_completion(completion_text)
 
             print(f"\n\n\nPrompt {prompt_id} completed: {completion_text}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")

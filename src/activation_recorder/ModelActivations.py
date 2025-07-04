@@ -7,20 +7,21 @@ split across multiple layers.
 
 from typing import Dict
 from src.activation_recorder.modules import LayerActivations
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 
 class ModelActivations:
     """
     For a single step, this stores a dictionary of layer_index -> LayerActivations.
     """
 
-    def __init__(self, step_index: int, model_info: ModelInformation):
+    def __init__(self, step_index: int, model_info: ModelInformation, completion_token: str = None):
         """
         :param step_index: The generation or inference step index
         :param model_info: The ModelInformation describing the model
         """
         self.step_index = step_index
         self.model_info = model_info
+        self.completion_token = completion_token  
         self.layers: Dict[int, LayerActivations] = {}
 
     def get_or_create_layer_activations(self, layer_index: int) -> LayerActivations:

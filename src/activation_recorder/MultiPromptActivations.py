@@ -10,7 +10,7 @@ import os, pickle, torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 from typing import Dict, List
 from src.activation_recorder.PromptActivations import PromptActivations
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 
 class MultiPromptActivations:
     """
@@ -24,7 +24,7 @@ class MultiPromptActivations:
         self.model_info = model_info
         self.prompts: Dict[int, PromptActivations] = {}
 
-    def get_or_create_prompt_activations(self, prompt_id: int, prompt_text: str) -> PromptActivations:
+    def get_or_create_prompt_activations(self, prompt_id: int, prompt_text: str, completion_text: str = None, completion_tokens: List[str] = None) -> PromptActivations:
         """
         Retrieves or creates a PromptActivations object for the given prompt_id.
         """
@@ -32,6 +32,8 @@ class MultiPromptActivations:
             self.prompts[prompt_id] = PromptActivations(
                 prompt_id=prompt_id,
                 prompt_text=prompt_text,
+                completion_text=completion_text,
+                completion_tokens=completion_tokens,
                 model_info=self.model_info
             )
         return self.prompts[prompt_id]

@@ -9,7 +9,7 @@ from typing import Optional
 from src.activation_recorder.modules.AttentionLayerActivations import AttentionLayerActivations
 from src.activation_recorder.modules.MLPLayerActivations import MLPLayerActivations
 from src.activation_recorder.modules.MoELayerActivations import MoELayerActivations
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 
 class LayerActivations:
     """

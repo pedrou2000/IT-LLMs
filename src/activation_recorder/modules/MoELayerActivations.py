@@ -7,7 +7,7 @@ including gating info and per-expert data.
 
 import torch
 from typing import Dict
-from src.activation_recorder.ModelInformation import ModelInformation
+from src.utils import ModelInformation
 
 class MoEExpertActivations:
     """
@@ -90,6 +90,11 @@ class MoELayerActivations:
         self.layer_index = layer_index
         self.model_info = model_info
         self.experts: Dict[int, MoEExpertActivations] = {}
+    
+    @property
+    def nodes(self) -> Dict[int, MoEExpertActivations]:
+        """ Return the dictionary of expert activations. """
+        return self.experts
 
     def add_expert_activations(self, expert_acts: MoEExpertActivations):
         idx = expert_acts.expert_index

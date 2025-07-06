@@ -523,10 +523,11 @@ class DeepseekV2MoE(nn.Module):
     A mixed expert module containing shared experts.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, layer_idx=None):
         super().__init__()
         self.config = config
         self.num_experts_per_tok = config.num_experts_per_tok
+        self.layer_idx = layer_idx
 
         if hasattr(config, "ep_size") and config.ep_size > 1:
             assert config.ep_size == dist.get_world_size()
@@ -582,12 +583,15 @@ class DeepseekV2MoE(nn.Module):
             y = y.to(hidden_states.dtype).view(*orig_shape)
             y = AddAuxiliaryLoss.apply(y, aux_loss)
         else:
-            y = self.moe_infer(hidden_states, topk_idx, topk_weight).view(*orig_shape)
+            y, activations = self.moe_infer(hidden_states, topk_idx, topk_weight)
+            y.view(*orig_shape)
             print(f"[MoE Inference] {y.shape=}, {topk_idx.shape=}, {topk_weight.shape=}")
         if self.config.n_shared_experts is not None:
-            y = y + self.shared_experts(identity)
+            shared_experts_out = self.shared_experts(identity)
+            activations["shared_experts_out"] = shared_experts_out
+            y = y + shared_experts_out
             print(f"[MoE Inference] {y.shape=}")
-        return y
+        return y, activations
 
     @torch.no_grad()
     def moe_infer(self, x, topk_ids, topk_weight):
@@ -673,7 +677,15 @@ class DeepseekV2MoE(nn.Module):
         summed_out = out_after_mul.sum(dim=1)
         print(f"[MoE Inference] {summed_out.shape=}")
 
-        return final_out
+        activations = {
+            "layer_idx": self.layer_idx, 
+            "topk_ids": topk_ids,
+            "topk_weights": topk_weight,
+            "out_before_mul": out_before_mul,
+            "out_after_mul": out_after_mul,
+        }
+
+        return final_out, activations
 
 
 # Copied from transformers.models.llama.modeling_llama.repeat_kv
@@ -1246,7 +1258,7 @@ class DeepseekV2DecoderLayer(nn.Module):
         )
 
         self.mlp = (
-            DeepseekV2MoE(config)
+            DeepseekV2MoE(config, layer_idx=layer_idx)
             if (
                 config.n_routed_experts is not None
                 and layer_idx >= config.first_k_dense_replace
@@ -1311,6 +1323,9 @@ class DeepseekV2DecoderLayer(nn.Module):
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
+        # If duplet take the first only 
+        if isinstance(hidden_states, tuple):
+            hidden_states, _ = hidden_states
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)

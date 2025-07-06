@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Sequence, Union, Tuple
 import numpy as np
+import xarray as xr
+import seaborn as sns
 import matplotlib.pyplot as plt
 import os, pickle
 import time
@@ -102,7 +104,9 @@ class PhyIDTimeSeries:
         self.str_ = np.asarray(atoms_res["str"], dtype=np.float32)
         self.sts = np.asarray(atoms_res["sts"], dtype=np.float32)
 
-        
+    def get_atoms_names(self) -> List[str]:
+        """Return the names of the atoms in this PhyIDTimeSeries."""
+        return sorted(k for k, v in vars(self).items() if isinstance(v, (list, np.ndarray)))
 
 @dataclass
 class PromptPhyID:
@@ -169,6 +173,106 @@ class PromptPhyID:
 
                         # Store result
                         self.phyid[(source_layer_index, source_node_index, target_layer_index, target_node_index)] = phyid_ts
+
+    def build_data_array(self) -> xr.DataArray:
+        """Stack *all* Φ‑ID atoms into a 6‑D ``xarray.DataArray``.
+
+        Dimensions: ``[atom, source_layer, source_node, target_layer, target_node, time]``.
+        The array is cached in ``self.data_array`` and returned.
+        """
+
+        if not self.phyid:
+            raise RuntimeError("No Φ‑ID data found; call _compute_phyid first.")
+
+        first_ts = next(iter(self.phyid.values()))
+        atoms = first_ts.get_atoms_names()  # Get all time series atoms from the first PhyIDTimeSeries
+
+        # Enumerate coordinate values
+        source_layers = sorted({k[0] for k in self.phyid})
+        source_nodes = sorted({k[1] for k in self.phyid})
+        target_layers = sorted({k[2] for k in self.phyid})
+        target_nodes = sorted({k[3] for k in self.phyid})
+        time_len = next(iter(self.phyid.values())).sts.size
+
+        data = np.empty((len(atoms), len(source_layers), len(source_nodes), len(target_layers), len(target_nodes), time_len), dtype=np.float32)
+
+        for (sl, sn, tl, tn), ts in self.phyid.items():
+            sL = source_layers.index(sl)
+            sN = source_nodes.index(sn)
+            tL = target_layers.index(tl)
+            tN = target_nodes.index(tn)
+            for a_idx, atom in enumerate(atoms):
+                data[a_idx, sL, sN, tL, tN, :] = getattr(ts, atom)
+
+        self.data_array = xr.DataArray(
+            data,
+            dims=["atom", "source_layer", "source_node", "target_layer", "target_node", "time",],
+            coords={
+                "atom": atoms,
+                "source_layer": source_layers,
+                "source_node": source_nodes,
+                "target_layer": target_layers,
+                "target_node": target_nodes,
+                "time": np.arange(time_len),
+            },
+            name="phiid",
+            attrs=dict(model=str(self.model_info.model_name)),
+        )
+        return self.data_array
+
+    # ------------------------------------------------------------------
+    # Convenience reductions & plots
+    # ------------------------------------------------------------------
+
+    def plot_mean_along(self, atom: str = "sts", varying_dim: str = "time") -> None:
+        """
+        Plot the mean of a specific Φ-ID atom along a chosen dimension,
+        aggregating over all others.
+
+        Parameters
+        ----------
+        atom : str
+            The Φ-ID atom to select, e.g., 'sts'.
+        varying_dim : str
+            The dimension along which to plot (e.g., 'time', 'source_layer', etc.).
+        """
+        if self.data_array is None:
+            self.build_data_array()
+
+        if varying_dim not in self.data_array.dims:
+            raise ValueError(f"Invalid dimension '{varying_dim}'. Must be one of: {list(self.data_array.dims)}")
+
+        # Compute mean over all dims except the one we want to vary along
+        dims_to_reduce = [d for d in self.data_array.dims if d not in ("atom", varying_dim)]
+        series = self.data_array.sel(atom=atom).mean(dim=dims_to_reduce)
+
+        series.plot.line(marker="o")
+        plt.title(f"Mean {atom.upper()} vs {varying_dim}")
+        plt.xlabel(varying_dim.replace('_', ' ').title())
+        plt.ylabel(atom.upper())
+        plt.grid(True, linestyle="--", alpha=0.5)
+        plt.tight_layout()
+        plt.show()
+
+    def node_heatmap(self, atom: str = "sts") -> None:
+        """Heat‑map of *atom* averaged over time (source×target)."""
+        if self.data_array is None:
+            self.build_data_array()
+
+        a = (
+            self.data_array.sel(atom=atom)
+            .mean(dim="time")
+            .stack(source=("source_layer", "source_node"))
+            .stack(target=("target_layer", "target_node"))
+        )
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(a, cmap="viridis")
+        plt.title(f"Mean {atom.upper()} information flow (source → target)")
+        plt.xlabel("Target node")
+        plt.ylabel("Source node")
+        plt.tight_layout()
+        plt.show()
+
 
 
 

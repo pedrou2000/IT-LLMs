@@ -16,6 +16,25 @@ from src.utils import ModelInformation
 from src.time_series_activations import MultiPromptTimeSeries, PromptTimeSeries, LayerTimeSeries, NodeTimeSeries
 
 
+INFORMATION_DYNAMICS = {
+    "storage": ["rtr", "xtx", "yty", "sts"],
+    "copy": ["xtr", "ytr"],
+    "transfer": ["xty", "ytx"],
+    "erasure": ["rtx", "rty"],
+    "downward_causation": ["stx", "sty", "str_"],
+    "upward_causation": ["xts", "yts", "rts"],
+    "information_storage": ["rtr", "rtx", "xtr", "xtx"],
+    "transfer_entropy_source_past_to_target_future": ["str_", "sty", "xtr", "xty"],
+    "causal_density": [(2,"str_"), "sty", "xtr", "xty", "stx", "ytx", "ytr"],
+    "integrated_information": ["sts", "xts", "yts", "stx", "sty", "xty", "ytx", "rts", "str_", (-1, "rtr")], 
+    "mutual_information": [
+        "rtr", "rtx", "rty", "rts", 
+        "str_", "stx", "sty", "sts", 
+        "xtr", "xtx", "xty", "xts", 
+        "ytr", "ytx", "yty", "yts", 
+    ]
+}
+
 
 @dataclass
 class PhyIDTimeSeries:
@@ -101,8 +120,25 @@ class PhyIDTimeSeries:
         self.rts = np.asarray(atoms_res["rts"], dtype=np.float32)
         self.stx = np.asarray(atoms_res["stx"], dtype=np.float32)
         self.sty = np.asarray(atoms_res["sty"], dtype=np.float32)
-        self.str_ = np.asarray(atoms_res["str"], dtype=np.float32)
+        self.str_ = np.asarray(atoms_res["str_"], dtype=np.float32)
         self.sts = np.asarray(atoms_res["sts"], dtype=np.float32)
+    
+    def compute_extra_atoms(self) -> None:
+        """ Compute additional atoms based on the existing ones. """
+        # Information dynamics atoms
+        for extra_atom, dependencies in INFORMATION_DYNAMICS.items():
+            extra_ts = np.zeros_like(self.xtx, dtype=np.float32)
+            for dep in dependencies:
+                multiplier = 1 if isinstance(dep, str) else dep[0]
+                dep_atom = dep if isinstance(dep, str) else dep[1]
+                extra_ts += multiplier * getattr(self, dep_atom)
+            setattr(self, extra_atom, extra_ts)
+        
+        # Mutual informaiton normalized atoms
+        mi = self.mutual_information
+        for atom in self.get_atoms_names():
+            setattr(self, f"{atom}_normalized", getattr(self, atom) / mi)
+        
 
     def get_atoms_names(self) -> List[str]:
         """Return the names of the atoms in this PhyIDTimeSeries."""
@@ -174,6 +210,15 @@ class PromptPhyID:
                         # Store result
                         self.phyid[(source_layer_index, source_node_index, target_layer_index, target_node_index)] = phyid_ts
 
+    def compute_extra_atoms(self) -> None:
+        """Compute additional atoms for all PhyIDTimeSeries in this prompt."""
+        for phyid_ts in self.phyid.values():
+            phyid_ts.compute_extra_atoms()
+    
+    def get_atoms_names(self) -> List[str]:
+        """Return the names of the atoms in all PhyIDTimeSeries of this prompt."""
+        return self.phyid[next(iter(self.phyid))].get_atoms_names()
+
     def build_data_array(self) -> xr.DataArray:
         """Stack *all* Φ‑ID atoms into a 6‑D ``xarray.DataArray``.
 
@@ -183,9 +228,8 @@ class PromptPhyID:
 
         if not self.phyid:
             raise RuntimeError("No Φ‑ID data found; call _compute_phyid first.")
-
-        first_ts = next(iter(self.phyid.values()))
-        atoms = first_ts.get_atoms_names()  # Get all time series atoms from the first PhyIDTimeSeries
+        
+        atoms = self.get_atoms_names()
 
         # Enumerate coordinate values
         source_layers = sorted({k[0] for k in self.phyid})
@@ -249,7 +293,7 @@ class PromptPhyID:
         series.plot.line(marker="o")
         plt.title(f"Mean {atom.upper()} vs {varying_dim}")
         plt.xlabel(varying_dim.replace('_', ' ').title())
-        plt.ylabel(atom.upper())
+        plt.ylabel(atom)
         plt.grid(True, linestyle="--", alpha=0.5)
         plt.tight_layout()
         plt.show()
@@ -306,6 +350,11 @@ class MultiPromptPhyID:
         if prompt_index not in self.prompts:
             raise KeyError(f"PromptPhyID for prompt index {prompt_index} not found.")
         return self.prompts[prompt_index]
+    
+    def compute_extra_atoms(self) -> None:
+        """Compute additional atoms for all PhyIDTimeSeries in all prompts."""
+        for prompt in self.prompts.values():
+            prompt.compute_extra_atoms()
 
     def save(self, dir_path: str) -> None:
         """Save the MultiPromptPhyID object to a pickle file within the specified directory."""

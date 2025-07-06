@@ -13,7 +13,7 @@ from src.activation_recorder import MultiPromptActivations
 Projection = Literal["norm", "mean"]  # supported projection options
 
 
-@dataclass(slots=True)
+@dataclass
 class NodeTimeSeries:
     """Stores the scalar time‑series for a single node (e.g. an attention head)."""
 
@@ -33,7 +33,7 @@ class NodeTimeSeries:
         return self._buffer  # type: ignore[return-value]
 
 
-@dataclass(slots=True)
+@dataclass
 class LayerTimeSeries:
     """Aggregates ``NodeTimeSeries`` for every node in a layer."""
 
@@ -48,7 +48,7 @@ class LayerTimeSeries:
         return series
 
 
-@dataclass(slots=True)
+@dataclass
 class PromptTimeSeries:
     """Holds per‑layer time‑series for a single prompt."""
 
@@ -64,7 +64,7 @@ class PromptTimeSeries:
         return ts
 
 
-@dataclass(slots=True)
+@dataclass
 class MultiPromptTimeSeries:
     """Top‑level container mapping each prompt to a ``PromptTimeSeries``."""
 
@@ -203,13 +203,13 @@ class MultiPromptTimeSeries:
                 figsize=(10, figsize_per_layer * len(layer_ids)),
             )
             axes = axes if isinstance(axes, (list, np.ndarray)) else [axes]
-            fig.suptitle(f"Prompt {prompt_id}")
 
             # draw each layer
             for ax, layer_id in zip(axes, layer_ids):
                 layer_ts = prompt_ts.layers[layer_id]
                 for node_id, node_ts in layer_ts.nodes.items():
-                    ax.plot(range(len(node_ts.values)), node_ts.values, label=f"N{node_id}")
+                    label = f"N{node_id}"
+                    ax.plot(range(len(node_ts.values)), node_ts.values, label=label)
                 ax.set_ylabel(f"Layer {layer_id}")
                 ax.margins(x=0)
 
@@ -227,7 +227,22 @@ class MultiPromptTimeSeries:
             else:
                 axes[-1].set_xlabel("Timestep")
 
-            axes[0].legend(fontsize="small", ncol=4, loc="upper right")
-            fig.tight_layout()
+
+            handles_by_label: dict[str, matplotlib.artist.Artist] = {}
+
+            for ax in axes:                                   # every subplot
+                for h, l in zip(*ax.get_legend_handles_labels()):
+                    if l and l not in handles_by_label:       # first time we see this label
+                        handles_by_label[l] = h               # remember its handle
+
+            if handles_by_label:                              # create a *deduplicated* legend
+                fig.legend(
+                    handles_by_label.values(), handles_by_label.keys(),
+                    fontsize="small", ncol=12,
+                    loc="upper right", bbox_to_anchor=(1, 1)
+                )
+
+
+            fig.tight_layout(rect=[0, 0, 1, 0.98])   # leave 8 % of the height free on top
             if show:
                 plt.show()

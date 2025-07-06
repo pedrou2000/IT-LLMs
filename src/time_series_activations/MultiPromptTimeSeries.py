@@ -26,8 +26,8 @@ class NodeTimeSeries:
         self._buffer.append(float(value))
     
     @property
-    def values(self) -> np.ndarray:
-        """Return the values as a *materialised* float32 array (lazy conversion)."""
+    def time_series(self) -> np.ndarray:
+        """Return the time_series as a *materialised* float32 array (lazy conversion)."""
         if isinstance(self._buffer, list):  # first access ➜ convert & cache
             self._buffer = np.asarray(self._buffer, dtype=np.float32)
         return self._buffer  # type: ignore[return-value]
@@ -209,7 +209,7 @@ class MultiPromptTimeSeries:
                 layer_ts = prompt_ts.layers[layer_id]
                 for node_id, node_ts in layer_ts.nodes.items():
                     label = f"N{node_id}"
-                    ax.plot(range(len(node_ts.values)), node_ts.values, label=label)
+                    ax.plot(range(len(node_ts.time_series)), node_ts.time_series, label=label)
                 ax.set_ylabel(f"Layer {layer_id}")
                 ax.margins(x=0)
 

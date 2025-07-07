@@ -1,0 +1,5 @@
+# conf/paths.yaml
+project_root: ${hydra:runtime.cwd}/..
+
+# data directories
+data_dir: ${paths.project_root}/data

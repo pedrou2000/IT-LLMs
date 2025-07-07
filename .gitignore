@@ -33,4 +33,5 @@ htmlcov/
 # Environment variable files
 .env
 
+# Personalized configuration files
 data/

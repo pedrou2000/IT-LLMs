@@ -256,3 +256,4 @@ class MultiPromptTimeSeries:
                 print(f"Time-series plot saved to {save_file}")
             else:
                 plt.show()
+                

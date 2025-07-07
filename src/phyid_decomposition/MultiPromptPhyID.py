@@ -307,6 +307,7 @@ class PromptPhyID:
         else:
             plt.show()
 
+
     def node_heatmap(self, atom: str = "sts", plot_dir: Union[str, None] = None) -> None:
         """Heat‑map of *atom* averaged over time (source×target)."""
         if self.data_array is None:

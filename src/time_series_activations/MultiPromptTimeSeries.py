@@ -252,6 +252,7 @@ class MultiPromptTimeSeries:
                     os.makedirs(plot_dir, exist_ok=True)
                 save_file = f"{plot_dir}/time_series.png"
                 fig.savefig(save_file, dpi=300)
+                plt.close(fig)
                 print(f"Time-series plot saved to {save_file}")
             else:
                 plt.show()

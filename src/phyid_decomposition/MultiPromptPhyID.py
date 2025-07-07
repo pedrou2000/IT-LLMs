@@ -302,6 +302,7 @@ class PromptPhyID:
                 os.makedirs(plot_dir, exist_ok=True)
             save_file = os.path.join(plot_dir, f"{varying_dim}.png")
             plt.savefig(save_file, dpi=300)
+            plt.close()
             print(f"Plot saved to {save_file}")
         else:
             plt.show()
@@ -329,6 +330,7 @@ class PromptPhyID:
                 os.makedirs(plot_dir, exist_ok=True)
             save_file = os.path.join(plot_dir, "heatmap.png")
             plt.savefig(save_file, dpi=300)
+            plt.close()
             print(f"Heatmap saved to {save_file}")
         else:
             plt.show()

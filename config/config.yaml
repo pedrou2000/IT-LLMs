@@ -2,4 +2,5 @@ defaults:
   - paths
   - model: D2-16-A2 
   - generation: default
+  - time_series: attention_outputs
 

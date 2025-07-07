@@ -50,17 +50,17 @@ class MultiPromptActivations:
         """
         return len(self.prompts)
 
-    def save(self, dir_path: str) -> None:
+    def save(self, file_path: str) -> None:
         """
         Save the MultiPromptActivations object to a pickle file within the specified directory.
         If the directory does not exist, it will be created.
 
         :param dir_path: Directory where the pickle file will be saved.
         """
+        dir_path = os.path.dirname(file_path)
         try:
             if not os.path.isdir(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
-            file_path = os.path.join(dir_path, "multi_prompt_activations.pkl")
             with open(file_path, "wb") as f:
                 pickle.dump(self, f)
             print(f"MultiPromptActivations successfully saved to '{file_path}'.")

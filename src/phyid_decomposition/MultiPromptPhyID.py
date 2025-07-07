@@ -120,7 +120,7 @@ class PhyIDTimeSeries:
         self.rts = np.asarray(atoms_res["rts"], dtype=np.float32)
         self.stx = np.asarray(atoms_res["stx"], dtype=np.float32)
         self.sty = np.asarray(atoms_res["sty"], dtype=np.float32)
-        self.str_ = np.asarray(atoms_res["str_"], dtype=np.float32)
+        self.str_ = np.asarray(atoms_res["str"], dtype=np.float32)
         self.sts = np.asarray(atoms_res["sts"], dtype=np.float32)
     
     def compute_extra_atoms(self) -> None:
@@ -268,7 +268,7 @@ class PromptPhyID:
     # Convenience reductions & plots
     # ------------------------------------------------------------------
 
-    def plot_mean_along(self, atom: str = "sts", varying_dim: str = "time") -> None:
+    def plot_mean_along(self, atom: str = "sts", varying_dim: str = "time", plot_dir: Union[str, None] = None) -> None:
         """
         Plot the mean of a specific Φ-ID atom along a chosen dimension,
         aggregating over all others.
@@ -296,9 +296,17 @@ class PromptPhyID:
         plt.ylabel(atom)
         plt.grid(True, linestyle="--", alpha=0.5)
         plt.tight_layout()
-        plt.show()
+        if plot_dir:
+            plot_dir = os.path.join(plot_dir, f"plot_mean_along/{atom}")
+            if not os.path.exists(plot_dir):
+                os.makedirs(plot_dir, exist_ok=True)
+            save_file = os.path.join(plot_dir, f"{varying_dim}.png")
+            plt.savefig(save_file, dpi=300)
+            print(f"Plot saved to {save_file}")
+        else:
+            plt.show()
 
-    def node_heatmap(self, atom: str = "sts") -> None:
+    def node_heatmap(self, atom: str = "sts", plot_dir: Union[str, None] = None) -> None:
         """Heat‑map of *atom* averaged over time (source×target)."""
         if self.data_array is None:
             self.build_data_array()
@@ -315,7 +323,15 @@ class PromptPhyID:
         plt.xlabel("Target node")
         plt.ylabel("Source node")
         plt.tight_layout()
-        plt.show()
+        if plot_dir:
+            plot_dir = os.path.join(plot_dir, f"node_heatmap/{atom}")
+            if not os.path.exists(plot_dir):
+                os.makedirs(plot_dir, exist_ok=True)
+            save_file = os.path.join(plot_dir, "heatmap.png")
+            plt.savefig(save_file, dpi=300)
+            print(f"Heatmap saved to {save_file}")
+        else:
+            plt.show()
 
 
 
@@ -356,12 +372,12 @@ class MultiPromptPhyID:
         for prompt in self.prompts.values():
             prompt.compute_extra_atoms()
 
-    def save(self, dir_path: str) -> None:
+    def save(self, file_path: str) -> None:
         """Save the MultiPromptPhyID object to a pickle file within the specified directory."""
+        dir_path = os.path.dirname(file_path)
         try:
             if not os.path.isdir(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
-            file_path = os.path.join(dir_path, "multi_prompt_phyid.pkl")
             with open(file_path, "wb") as f:
                 pickle.dump(self, f)
             print(f"MultiPromptPhyID successfully saved to '{file_path}'.")

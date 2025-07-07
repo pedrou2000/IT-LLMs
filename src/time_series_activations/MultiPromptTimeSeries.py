@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Sequence, Union
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -172,8 +173,8 @@ class MultiPromptTimeSeries:
         *,
         token_x: bool | str = "auto",
         figsize_per_layer: float = 2.5,
-        show: bool = True,
         ticks_all_layers: bool = False,
+        plot_dir: Union[str, None] = None,
     ) -> None:
         """Plot each node’s series (figure‑per‑prompt, subplot‑per‑layer).
 
@@ -244,5 +245,13 @@ class MultiPromptTimeSeries:
 
 
             fig.tight_layout(rect=[0, 0, 1, 0.98])   # leave 8 % of the height free on top
-            if show:
+
+            if plot_dir:
+                plot_dir = f"{plot_dir}/prompt_{prompt_id}"
+                if not os.path.exists(plot_dir):
+                    os.makedirs(plot_dir, exist_ok=True)
+                save_file = f"{plot_dir}/time_series.png"
+                fig.savefig(save_file, dpi=300)
+                print(f"Time-series plot saved to {save_file}")
+            else:
                 plt.show()

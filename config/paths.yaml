@@ -1,14 +1,19 @@
 paths:
   project_root: /home/p84400019/projects/consciousness-llms/IT-LLMs/
-
   model_path: ${model.company}/${model.model_family}/${model.model_size}/${model.it}/
 
   # data directories
   data_dir: ${paths.project_root}data/${paths.model_path}
+  
   data_activations_dir: ${paths.data_dir}activations/
+  data_activations_file: ${paths.data_activations_dir}multi_prompt_activations.pkl
+  
   data_phyid_dir: ${paths.data_dir}phyid/
+  data_phyid_file: ${paths.data_phyid_dir}multi_prompt_phyid.pkl
+
 
   # plot directories
   plot_dir: ${paths.project_root}plots/${paths.model_path}
   plot_activations_dir: ${paths.plot_dir}activations/
+  plot_time_series_dir: ${paths.plot_activations_dir}time_series/
   plot_phyid_dir: ${paths.plot_dir}phyid/

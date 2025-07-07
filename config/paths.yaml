@@ -1,5 +1,14 @@
-# conf/paths.yaml
-project_root: ${hydra:runtime.cwd}/..
+paths:
+  project_root: /home/p84400019/projects/consciousness-llms/IT-LLMs/
 
-# data directories
-data_dir: ${paths.project_root}/data
+  model_path: ${model.company}/${model.model_family}/${model.model_size}/${model.it}/
+
+  # data directories
+  data_dir: ${paths.project_root}data/${paths.model_path}
+  data_activations_dir: ${paths.data_dir}activations/
+  data_phyid_dir: ${paths.data_dir}phyid/
+
+  # plot directories
+  plot_dir: ${paths.project_root}plots/${paths.model_path}
+  plot_activations_dir: ${paths.plot_dir}activations/
+  plot_phyid_dir: ${paths.plot_dir}phyid/

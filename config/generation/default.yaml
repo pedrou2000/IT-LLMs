@@ -1,0 +1,4 @@
+max_new_tokens: int = 128
+default_prompts: list[str] = [
+    "Imagine a future where humans have evolved to live underwater. Describe the adaptations they might develop.",
+    ]

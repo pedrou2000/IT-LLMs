@@ -10,7 +10,7 @@ paths:
   data_dir: ${paths.project_root}data/${paths.model_path}
   
   data_activations_dir: ${paths.data_dir}activations/
-  data_activations_file: ${paths.data_activations_dir}multi_prompt_activations.pkl
+  data_activations_file: ${paths.data_activations_dir}${generation.name}/multi_prompt_activations.pkl
   
   data_phyid_dir: ${paths.data_dir}phyid/${paths.phyid_method}
   data_phyid_file: ${paths.data_phyid_dir}multi_prompt_phyid.pkl

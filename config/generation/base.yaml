@@ -1,3 +1,5 @@
+name: base
 max_new_tokens: 128
-default_prompts:
+
+prompts:
   - "Imagine a future where humans have evolved to live underwater. Describe the adaptations they might develop."

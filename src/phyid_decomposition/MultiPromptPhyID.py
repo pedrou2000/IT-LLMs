@@ -152,6 +152,7 @@ class PromptPhyID:
     model_info: ModelInformation
     generated_tokens: Sequence[str] = field(default_factory=list)
     phyid: Dict[Tuple[int, int, int, int], PhyIDTimeSeries] = field(default_factory=dict, init=False, repr=False) # (source_layer_index, source_node_index, target_layer_index, target_node_index) -> PhyIDTimeSeries
+    data_array: Union[xr.DataArray, None] = field(default=None, init=False, repr=False)
 
     def get_phyid(self, source_layer_index: int, source_node_index: int, target_layer_index: int, target_node_index: int) -> PhyIDTimeSeries:
         """Retrieve or create a PhyIDTimeSeries for the given indices."""
@@ -191,15 +192,9 @@ class PromptPhyID:
                         t0 = time.perf_counter()
                         phyid_ts = PhyIDTimeSeries.from_time_series(
                             model_info,
-                            source_layer_index,
-                            source_node_index,
-                            target_layer_index,
-                            target_node_index,
-                            source_time_series=source_node_time_series,
-                            target_time_series=target_node_time_series,
-                            phyid_tau=phyid_tau,
-                            phyid_kind=phyid_kind,
-                            phyid_redundancy=phyid_redundancy
+                            source_layer_index, source_node_index, target_layer_index, target_node_index,
+                            source_time_series=source_node_time_series, target_time_series=target_node_time_series,
+                            phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy
                         )
                         dt = time.perf_counter() - t0
                         cumulative_time += dt
@@ -350,6 +345,9 @@ class MultiPromptPhyID:
 
     model_info: ModelInformation
     prompts: Dict[int, PromptPhyID] = field(default_factory=dict, init=False)
+    average_prompt_phyid: Union[PromptPhyID, None] = field(default=None, init=False, repr=False)
+    data_array: Union[xr.DataArray, None] = field(default=None, init=False, repr=False)
+
 
     @classmethod
     def from_time_series(
@@ -383,6 +381,78 @@ class MultiPromptPhyID:
         """Compute additional atoms for all PhyIDTimeSeries in all prompts."""
         for prompt in self.prompts.values():
             prompt.compute_extra_atoms()
+    
+    def build_data_array(self) -> xr.DataArray:
+        """
+        Stack per-prompt Φ-ID DataArrays into one 7-D array.
+
+        Output dims:
+            [prompt, atom, source_layer, source_node,
+            target_layer, target_node, time]
+        """
+        # 1. Build (or fetch) each prompt-level DataArray
+        da_list, prompt_labels = [], []
+        for p_idx, prompt in self.prompts.items():
+            da = prompt.build_data_array()        # <-- reuse!
+            da_list.append(da)
+            prompt_labels.append(p_idx)
+
+        # 2. Concatenate along a new 'prompt' dimension
+        big = xr.concat(da_list, dim=xr.Index(prompt_labels, name="prompt"))
+
+        # 3. Attach model-level attrs / encoding as needed
+        big.attrs.update(model=str(self.model_info.model_name))
+        self.data_array = big
+
+        return big
+
+    def compute_average_prompt_phyid(self) -> PromptPhyID:
+        """
+        Build (if necessary) the 7-D DataArray, then produce a PromptPhyID
+        whose Φ-ID time-series are the mean over prompts, **without**
+        collapsing node-pair or time dimensions.
+        """
+        da = self.data_array or self.build_data_array()
+        avg_da = da.mean(dim="prompt") # [atom, source_layer, …, time]
+
+        # ------------------------------------------------------------------
+        # 2 · Convert the 6-D DataArray back into a PromptPhyID wrapper
+        # ------------------------------------------------------------------
+        out = PromptPhyID(
+            prompt_index=-1,              # “synthetic” prompt
+            model_info=self.model_info,
+            generated_tokens=[],          # no natural token stream
+        )
+
+        # Enumerate every node-pair coordinate once
+        for sl in avg_da.coords["source_layer"].values:
+            for sn in avg_da.coords["source_node"].values:
+                for tl in avg_da.coords["target_layer"].values:
+                    for tn in avg_da.coords["target_node"].values:
+
+                        # Slice all atoms for this pair   (shape ⇒ [atom, time])
+                        pair_ts = avg_da.sel(
+                            source_layer=sl, source_node=sn,
+                            target_layer=tl, target_node=tn
+                        )
+
+                        # Build a PhyIDTimeSeries and shove the values in
+                        phy_ts = PhyIDTimeSeries(
+                            model_info=self.model_info,
+                            source_layer_index=int(sl),
+                            source_node_index=int(sn),
+                            target_layer_index=int(tl),
+                            target_node_index=int(tn),
+                        )
+                        # Each atom lives in pair_ts as pair_ts.sel(atom=atom_name)
+                        for atom in pair_ts.coords["atom"].values:
+                            setattr(phy_ts, atom, pair_ts.sel(atom=atom).values)
+
+                        # Store
+                        out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
+
+        self.average_prompt_phyid = out
+        return out
 
     def save(self, file_path: str) -> None:
         """Save the MultiPromptPhyID object to a pickle file within the specified directory."""

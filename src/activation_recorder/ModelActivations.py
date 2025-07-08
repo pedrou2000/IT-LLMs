@@ -48,6 +48,11 @@ class ModelActivations:
         """ Verify the recorded activations for all layers. Checks shapes and values of attention and MLP activations. """
         for layer_index, layer in self.layers.items():
             layer.verify(diff_q_size, prompt_len, step_id, max_new_tokens)
+    
+    def uncompress_moe_activations(self, node_activation: str = "expert_output") -> None:
+        """ Uncompress MoE activations by filling missing nodes with zeros. """
+        for layer_index, layer in self.layers.items():
+            layer.uncompress_moe_activations(node_activation)
 
 
 

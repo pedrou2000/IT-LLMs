@@ -62,6 +62,15 @@ class PromptActivations:
         for step_index, step_activations in self.steps.items():
             step_activations.verify(diff_q_size, prompt_len, step_index, max_new_tokens)
     
+    def uncompress_moe_activations(self, node_activation: str = "expert_output") -> None:
+        """ Uncompress MoE activations by filling missing nodes with zeros across all steps. """
+        for step_index, step_activations in self.steps.items():
+            step_activations.uncompress_moe_activations(node_activation)
+
+    def __len__(self):
+        """ Return the number of steps recorded for this prompt. """
+        return len(self.steps)
+    
     
 
 

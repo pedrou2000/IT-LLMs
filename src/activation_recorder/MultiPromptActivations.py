@@ -89,8 +89,6 @@ class MultiPromptActivations:
             print(f"Error while loading MultiPromptActivations from '{file_path}': {e}")
             raise
 
-    
-
     def verify_recorded_activations(self, prompts: List[str] = None, max_new_tokens: int = None, tokenizer: AutoTokenizer = None, diff_q_size: bool = False):
         """ Verify the recorded activations are correct in shape and value. """
         activations = self
@@ -111,3 +109,8 @@ class MultiPromptActivations:
 
         # Print a success message
         print(f'Activations check passed!')
+    
+    def uncompress_moe_activations(self, node_activation: str = "expert_output") -> None:
+        """ Uncompress MoE activations by filling missing nodes with zeros across all prompts. """
+        for prompt_id, prompt_activations in self.prompts.items():
+            prompt_activations.uncompress_moe_activations(node_activation)

@@ -126,3 +126,17 @@ class MoELayerActivations:
                 n_active_experts += 1
         assert n_active_experts == self.model_info.num_experts_per_tok + 1, f'Expected {self.model_info.n_routed_experts + self.model_info.n_shared_experts} active experts, got {n_active_experts}'
 
+    def uncompress_activations(self, node_activation: str = "expert_output") -> None:
+        """ Fill in missing expert activations with zeros for consistency. """
+        # Start by filling the shapes of each of the moe activations with zeros
+        act_shape = None
+        for expert_index, expert_acts in self.experts.items():
+            if hasattr(expert_acts, node_activation) and getattr(expert_acts, node_activation) is not None:
+                act_shape = getattr(expert_acts, node_activation).shape
+                break
+        
+        # Now iterate through all experts and fill in the missing activations with zeros
+        for expert_index, expert_acts in self.experts.items():
+            if hasattr(expert_acts, node_activation) and getattr(expert_acts, node_activation) is None:
+                zero_tensor = torch.zeros(act_shape, dtype=torch.float32)
+                setattr(expert_acts, node_activation, zero_tensor)

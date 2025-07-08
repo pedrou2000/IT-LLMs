@@ -58,6 +58,11 @@ class LayerActivations:
             self.attention.verify(diff_q_size, prompt_len, step_id, max_new_tokens)
         if self.moe:
             self.moe.verify(diff_q_size, prompt_len, step_id, max_new_tokens)
+    
+    def uncompress_moe_activations(self, node_activation: str = "expert_output") -> None:
+        """ Uncompress MoE activations by filling missing nodes with zeros. """
+        if self.moe:
+            self.moe.uncompress_activations(node_activation)
 
 if __name__ == "__main__":
     """

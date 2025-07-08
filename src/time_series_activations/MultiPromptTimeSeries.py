@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src.utils import ModelInformation
-from src.activation_recorder import MultiPromptActivations
+from src.activation_recorder import MultiPromptActivations, PromptActivations, ModelActivations
 
 
 Projection = Literal["norm", "mean", "max"]
@@ -62,7 +62,7 @@ class PromptTimeSeries:
     def from_activations(
         cls,
         prompt_index: int,
-        activations: Dict[int, MultiPromptActivations],
+        activations: PromptActivations,
         model_info: ModelInformation,
         node_type: str,
         node_activation: str,
@@ -91,6 +91,8 @@ class PromptTimeSeries:
         obj = cls(prompt_index, model_info)
 
         generated_tokens = activations.generated_tokens
+        if node_type =="moe":
+            activations.uncompress_moe_activations(node_activation=node_activation)
 
         for step_index, step_acts in activations.steps.items():
             del step_index  # step granularity handled implicitly by append order
@@ -115,19 +117,16 @@ class PromptTimeSeries:
                         continue
                     node_ts = layer_ts.get_or_create_node(node_index)
                     activation = getattr(node_acts, node_activation, None)
-                    if node_type == "moe" and activation is None:
-                        value = 0.0  # MoE nodes without activation are inactive
-                    elif activation is None:
-                            raise AttributeError(f"Node {node_index} in layer {layer_index} lacks activation '{node_activation}'.")
-                    else:
-                        value = obj._project(activation, projection_method)
+                    
+                    # Project the activation tensor to a scalar
+                    value = obj._project(activation, projection_method)
                     node_ts.add_timestep(value)
         # Set the tokens for the prompt time-series
         obj.generated_tokens = generated_tokens if generated_tokens is not None else []
 
 
         return obj
-    
+
     @staticmethod
     def _project(tensor, method: Projection) -> float:  # noqa: ANN001 – tensor type is backend‑dependent
         """Project the incoming tensor to a scalar."""

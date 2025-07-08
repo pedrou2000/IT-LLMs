@@ -1,6 +1,7 @@
 defaults:
   - paths
   - model: D2-16-A2 
-  - generation: default
-  - time_series: attention_outputs
+  - generation: base
+  - time_series: attention_outputs_max
+  - phyid: base
 

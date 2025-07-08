@@ -1,6 +1,10 @@
 paths:
   project_root: /home/p84400019/projects/consciousness-llms/IT-LLMs/
+  
+  # useful composition of paths
   model_path: ${model.company}/${model.model_family}/${model.model_size}/${model.it}/
+  activation_method: ${time_series.node_type}/${time_series.node_activation}/${time_series.projection_method}/
+  phyid_method: ${paths.activation_method}phyid_tau-${phyid.tau}/phyid_kind-${phyid.kind}/phyid_redundancy-${phyid.redundancy}/
 
   # data directories
   data_dir: ${paths.project_root}data/${paths.model_path}
@@ -8,12 +12,11 @@ paths:
   data_activations_dir: ${paths.data_dir}activations/
   data_activations_file: ${paths.data_activations_dir}multi_prompt_activations.pkl
   
-  data_phyid_dir: ${paths.data_dir}phyid/
+  data_phyid_dir: ${paths.data_dir}phyid/${paths.phyid_method}
   data_phyid_file: ${paths.data_phyid_dir}multi_prompt_phyid.pkl
 
 
   # plot directories
   plot_dir: ${paths.project_root}plots/${paths.model_path}
-  plot_activations_dir: ${paths.plot_dir}activations/
-  plot_time_series_dir: ${paths.plot_activations_dir}time_series/
-  plot_phyid_dir: ${paths.plot_dir}phyid/
+  plot_time_series_dir: ${paths.plot_dir}time_series/${paths.activation_method}
+  plot_phyid_dir: ${paths.plot_dir}phyid/${paths.phyid_method}

@@ -161,13 +161,15 @@ class PromptPhyID:
         return self.phyid[key]
     
     @classmethod
-    def from_time_series(cls, prompt_time_series: PromptTimeSeries, model_info: ModelInformation, prompt_index: int, generated_tokens: Sequence[str] = None) -> "PromptPhyID":
+    def from_time_series(cls, prompt_time_series: PromptTimeSeries, model_info: ModelInformation, prompt_index: int, generated_tokens: Sequence[str] = None,
+                         phyid_tau: int = 1, phyid_kind: Literal["gaussian", "discrete"] = "gaussian", phyid_redundancy: Literal["MMI", "CCS"] = "MMI") -> "PromptPhyID":
         """Create a new PromptPhyID with the given prompt index and model information."""
         obj = cls(prompt_index, model_info, generated_tokens=generated_tokens)
-        obj._compute_phyid(prompt_time_series, model_info)
+        obj._compute_phyid(prompt_time_series, model_info, phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy)
         return obj
 
-    def _compute_phyid(self, prompt_time_series: PromptTimeSeries, model_info: ModelInformation) -> None:
+    def _compute_phyid(self, prompt_time_series: PromptTimeSeries, model_info: ModelInformation, phyid_tau: int = 1, 
+                       phyid_kind: Literal["gaussian", "discrete"] = "gaussian", phyid_redundancy: Literal["MMI", "CCS"] = "MMI") -> None:
         """Compute the phyid time-series for each node in the prompt time-series."""
 
         nodes = [(layer_index, node_index) for layer_index, layer in prompt_time_series.layers.items() for node_index in layer.nodes.keys()]
@@ -194,7 +196,10 @@ class PromptPhyID:
                             target_layer_index,
                             target_node_index,
                             source_time_series=source_node_time_series,
-                            target_time_series=target_node_time_series
+                            target_time_series=target_node_time_series,
+                            phyid_tau=phyid_tau,
+                            phyid_kind=phyid_kind,
+                            phyid_redundancy=phyid_redundancy
                         )
                         dt = time.perf_counter() - t0
                         cumulative_time += dt
@@ -350,6 +355,9 @@ class MultiPromptPhyID:
     def from_time_series(
         cls,
         multi_prompt_time_series: MultiPromptTimeSeries,
+        phyid_tau: int = 1,
+        phyid_kind: Literal["gaussian", "discrete"] = "gaussian",
+        phyid_redundancy: Literal["MMI", "CCS"] = "MMI"
     ) -> "MultiPromptPhyID":
         """Create a new ``MultiPromptPhyID`` from a ``MultiPromptTimeSeries``."""
         model_info = multi_prompt_time_series.model_info
@@ -359,7 +367,8 @@ class MultiPromptPhyID:
             # Create a PromptPhyID for each prompt
             print(f"Processing prompt {prompt_index+1}/{len(multi_prompt_time_series.prompts)} with {len(prompt_ts.generated_tokens)} generated tokens.")
             generated_tokens = prompt_ts.generated_tokens
-            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens)
+            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, 
+                                                         phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy)
             obj.prompts[prompt_index] = prompt_phi_id
 
         return obj

@@ -62,7 +62,8 @@ class MultiPromptActivations:
             if not os.path.isdir(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
             with open(file_path, "wb") as f:
-                pickle.dump(self, f)
+                # pickle.dump(self, f)
+                torch.save(self, f) 
             print(f"MultiPromptActivations successfully saved to '{file_path}'.")
         except Exception as e:
             print(f"Error while saving MultiPromptActivations to '{dir_path}': {e}")
@@ -80,7 +81,8 @@ class MultiPromptActivations:
             raise FileNotFoundError(f"No file found at '{file_path}'.")
         try:
             with open(file_path, "rb") as f:
-                loaded_obj = pickle.load(f)  # ← changed from torch.load
+                # loaded_obj = pickle.load(f)
+                loaded_obj = torch.load(f, map_location='cpu', weights_only=False)
             if not isinstance(loaded_obj, cls):
                 print(f"Loaded object is not a MultiPromptActivations instance. Got type: {type(loaded_obj)}")
             print(f"MultiPromptActivations successfully loaded from '{file_path}'.")

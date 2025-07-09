@@ -1,4 +1,4 @@
-name: base
+name: base_prompt
 max_new_tokens: 128
 
 prompts:

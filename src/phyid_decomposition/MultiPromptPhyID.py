@@ -205,7 +205,8 @@ class PromptPhyID:
                             avg_time = cumulative_time / samples_seen
                             eta_seconds = avg_time * (total_pairs - samples_seen)
                             eta = timedelta(seconds=int(eta_seconds))
-                            print(f"[ETA] {samples_seen}/{total_pairs} done | avg={avg_time:.3f}s | ETA ≈ {eta}")
+                            print(f"[ETA] {samples_seen}/{total_pairs} done | avg={avg_time:.3f}s | ETA ≈ {eta}", flush=True)
+                            # flush the output to ensure it appears immediately
 
                         # Store result
                         self.phyid[(source_layer_index, source_node_index, target_layer_index, target_node_index)] = phyid_ts

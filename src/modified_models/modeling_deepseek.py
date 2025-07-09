@@ -585,12 +585,10 @@ class DeepseekV2MoE(nn.Module):
         else:
             y, activations = self.moe_infer(hidden_states, topk_idx, topk_weight)
             y.view(*orig_shape)
-            print(f"[MoE Inference] {y.shape=}, {topk_idx.shape=}, {topk_weight.shape=}")
         if self.config.n_shared_experts is not None:
             shared_experts_out = self.shared_experts(identity)
             activations["shared_experts_out"] = shared_experts_out
             y = y + shared_experts_out
-            print(f"[MoE Inference] {y.shape=}")
         return y, activations
 
     @torch.no_grad()
@@ -644,7 +642,6 @@ class DeepseekV2MoE(nn.Module):
             expert = self.experts[i + self.ep_rank * self.experts_per_rank]
             tokens_for_this_expert = sorted_tokens[start_idx:end_idx]
             expert_out = expert(tokens_for_this_expert)
-            # print(f"[MoE Inference] expert {i} {expert_out.shape=}, {tokens_for_this_expert.shape=}")
             outputs.append(expert_out)
             start_idx = end_idx
 
@@ -661,7 +658,6 @@ class DeepseekV2MoE(nn.Module):
 
         new_x = torch.empty_like(outs)
         new_x[idxs] = outs
-        print(f"[MoE Inference] {new_x.shape=}, {topk_ids.shape=}, {topk_weight.shape=}")
         final_out = (
             new_x.view(*topk_ids.shape, -1)
             .type(topk_weight.dtype)
@@ -671,11 +667,8 @@ class DeepseekV2MoE(nn.Module):
         )
 
         out_before_mul = new_x.view(*topk_ids.shape, -1).type(topk_weight.dtype)
-        print(f"[MoE Inference] {out_before_mul.shape=}, {topk_weight.shape=}")
         out_after_mul = out_before_mul.mul_(topk_weight.unsqueeze(dim=-1))
-        print(f"[MoE Inference] {out_after_mul.shape=}")
         summed_out = out_after_mul.sum(dim=1)
-        print(f"[MoE Inference] {summed_out.shape=}")
 
         activations = {
             "layer_idx": self.layer_idx, 

@@ -82,14 +82,26 @@ class ActivationRecorder:
         for h in self._hooks:
             h.remove()
         self._hooks = []
+    
+    @staticmethod
+    def _apply_prompt_template(prompt, tokenizer, prompt_template: str) -> str:
+        if prompt_template == 'chat':
+            messages = [{"role": "user", "content": prompt}]
+            return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        elif prompt_template == 'base':
+            return "### Instruction:\n{prompt}\n\n### Response:\n"
+        elif prompt_template == 'no':
+            return prompt
+        else:
+            raise ValueError("Invalid prompt template type. Choose 'chat', 'base', or 'none'.")
 
-    def record_prompts(self, prompts: List[str], max_new_tokens: int = 20, use_cache: bool = True) -> MultiPromptActivations:
+    def record_prompts(self, prompts: List[str], max_new_tokens: int = 20, prompt_template: str = 'no') -> MultiPromptActivations:
         """
         Runs autoregressive generation for each prompt and collects intermediate activations
         via forward hooks. Each new sub-activation is attached bottom-up to the final structure.
         """
         # Record the prompts and max_new_tokens
-        self.prompts = prompts
+        self.prompts = [self._apply_prompt_template(prompt, self.tokenizer, prompt_template) for prompt in prompts]
         self.max_new_tokens = max_new_tokens
 
         # Attach hooks before generation
@@ -143,7 +155,6 @@ class ActivationRecorder:
         """
         # If we haven't started recording (prompt_id is None), skip
         if self._current_prompt_id is not None:
-            print(f"** Done forward pass for step {self._current_step_index} **")
             self._current_step_index += 1
     
     def _attention_hook_fn(self, module, module_input, module_output):
@@ -152,16 +163,11 @@ class ActivationRecorder:
         and attach it to the correct place in the bottom-up structure.
         """
         layer_idx = self._extract_layer_index(module)
-        print(f'Hook for {module.__class__.__name__} layer {layer_idx} captured the following module output: {len(module_output)}')
         if self._current_prompt_id is None:
             return
 
         _, activations, _ = module_output
 
-        for key, value in activations.items():
-            if hasattr(value, 'shape'):
-                print(f'{key} shape: {value.shape}')
-        print('---')
         
         assert layer_idx == activations['layer_idx'], f'Layer index mismatch: {layer_idx} != {activations["layer_idx"]}'
 
@@ -173,14 +179,12 @@ class ActivationRecorder:
         
         # Remove prompt tokens from activations if present
         if self._includes_prompt_activations(activations, dim=-2): # The token dimension is -2
-            print('Removing prompt tokens from activations')
             activations = self._remove_prompt_activations(activations, dim=-2) # The token dimension is -2           
         
         # Create head activations
         for head_idx in range(self.model_info.num_attention_heads_per_layer):
             head_activations = self._create_head_activations(activations, layer_idx, head_idx)
             attn.add_head_activations(head_activations)
-        print(f"Attention layer {layer_idx} activations captured with {len(attn.heads)} heads.")        
         
 
     
@@ -242,7 +246,6 @@ class ActivationRecorder:
         """
         is_moe_layer = hasattr(module, 'experts')
         layer_idx = self._extract_layer_index(module)
-        print(f'Hook for {module.__class__.__name__} layer {layer_idx} which is_moe_layer={is_moe_layer}, captured the following module output: {len(module_output)}')
         if self._current_prompt_id is None or is_moe_layer:
             return
 
@@ -266,7 +269,6 @@ class ActivationRecorder:
         """
         is_moe_layer = hasattr(module, 'experts')
         layer_idx = self._extract_layer_index(module)
-        print(f'Hook for {module.__class__.__name__} layer {layer_idx} which is_moe_layer={is_moe_layer}, captured the following module output: {len(module_output)}')
         if self._current_prompt_id is None or not is_moe_layer:
             return
 
@@ -280,18 +282,9 @@ class ActivationRecorder:
         layer_acts = model_acts.get_or_create_layer_activations(layer_idx)
         moe_layer = layer_acts.get_or_create_moe()
         
-        for key, value in activations.items():
-            if hasattr(value, 'shape'):
-                print(f'{key} shape: {value.shape}')
-        
-        if 'topk_ids' in activations and 'topk_weight' in activations:
-            print(f'topk_ids: {activations["topk_ids"]}')
-            print(f'topk_weight: {activations["topk_weight"]}')
-        print('---')     
 
         # Remove prompt tokens from activations if present
         if self._includes_prompt_activations_moe(activations):
-            print('Removing prompt tokens from activations')
             activations = self._remove_prompt_activations_moe(activations) 
         else:
             # Squeeze the activations to remove the extra dimension
@@ -299,17 +292,7 @@ class ActivationRecorder:
                 if hasattr(value, 'shape') and len(value.shape) > 1:
                     activations[key] = value.squeeze()
 
-        for key, value in activations.items():
-            if hasattr(value, 'shape'):
-                print(f'{key} shape: {value.shape}')
-        
-        if 'topk_ids' in activations and 'topk_weight' in activations:
-            print(f'topk_ids: {activations["topk_ids"]}')
-            print(f'topk_weight: {activations["topk_weight"]}')
-        print('---')     
-        
         self._create_and_add_moe_expert_activations(activations, layer_idx, moe_layer)
-        print(f"MoE layer {layer_idx} activations captured with {len(moe_layer.experts)} experts.")
     
 
     
@@ -340,9 +323,6 @@ class ActivationRecorder:
         assert topk_ids.shape[0] == self.model_info.num_experts_per_tok, f'Expected {self.model_info.num_experts_per_tok} experts, got {topk_ids.shape}'
         assert topk_weights.shape[0] == self.model_info.num_experts_per_tok, f'Expected {self.model_info.num_experts_per_tok} experts, got {topk_weights.shape}'
         assert topk_ids.shape == topk_weights.shape == (self.model_info.num_experts_per_tok,), f'Expected topk_ids and topk_weights to have shape ({self.model_info.num_experts_per_tok},), got {topk_ids.shape} and {topk_weights.shape}'
-        # topk_ids = topk_ids.tolist()  # Convert to list for easier indexing
-        # topk_weights = topk_weights.tolist()  # Convert to list for easier indexing
-        print(f"Top-k experts IDs: {topk_ids}, Top-k weights: {topk_weights}, creating {self.model_info.n_routed_experts} experts.")
 
         for expert_index in range(self.model_info.n_routed_experts):
             if expert_index in topk_ids:
@@ -382,7 +362,6 @@ class ActivationRecorder:
             layer_index = layer_idx,
             expert_index = expert_index # Shared expert index is always the last one
         )
-        print(f"Adding expert {expert_index} activations: {repr(expert_activations)}")
         moe_layer.add_expert_activations(shared_expert)
 
 

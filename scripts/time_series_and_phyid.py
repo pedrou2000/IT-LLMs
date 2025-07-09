@@ -32,7 +32,7 @@ from src.phyid_decomposition import MultiPromptPhyID, PromptPhyID, PhyIDTimeSeri
 
 print("Creating phyid decomposition from time series...", flush=True)
 data_phyid_file = cfg.paths.data_phyid_file
-phyid_comp = MultiPromptPhyID.from_time_series(
+phyid_comp = MultiPromptPhyID.from_time_series_parallel(
     time_series,
     cfg.phyid.tau,
     cfg.phyid.kind,

@@ -17,6 +17,6 @@ paths:
 
 
   # plot directories
-  plot_dir: ${paths.project_root}plots/${paths.model_path}
+  plot_dir: ${paths.project_root}plots/${paths.model_path}${generation.name}/
   plot_time_series_dir: ${paths.plot_dir}time_series/${paths.activation_method}
   plot_phyid_dir: ${paths.plot_dir}phyid/${paths.phyid_method}

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """ This module provides the implementation of the PhiID decomposition for time-series data in a multi-prompt setting. """
 
 from dataclasses import dataclass, field
@@ -9,6 +10,9 @@ import matplotlib.pyplot as plt
 import os, pickle
 import time
 from datetime import timedelta
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from tqdm.auto import tqdm
+import multiprocessing
 
 from phyid.calculate import calc_PhiID 
 
@@ -371,6 +375,58 @@ class MultiPromptPhyID:
             obj.prompts[prompt_index] = prompt_phi_id
 
         return obj
+
+    @staticmethod
+    def _build_one_prompt(args):
+        idx, prompt_ts, model_info, phyid_tau, phyid_kind, phyid_redundancy = args
+        generated_tokens = prompt_ts.generated_tokens
+        phy = PromptPhyID.from_time_series(       # -- heavy work
+            prompt_ts, model_info, idx, generated_tokens,
+            phyid_tau=phyid_tau,
+            phyid_kind=phyid_kind,
+            phyid_redundancy=phyid_redundancy,
+        )
+        return idx, phy
+
+    @classmethod
+    def from_time_series_parallel(
+        cls,
+        multi_prompt_time_series: MultiPromptTimeSeries,
+        phyid_tau: int = 1,
+        phyid_kind: Literal["gaussian", "discrete"] = "gaussian",
+        phyid_redundancy: Literal["MMI", "CCS"] = "MMI",
+        n_workers: int | None = None,     
+    ) -> "MultiPromptPhyID":
+        """
+        Parallel version.  Set ``n_workers`` to the number of CPU cores you
+        want to devote (default = all available).
+        """
+        model_info = multi_prompt_time_series.model_info
+        obj = cls(model_info)
+
+        # ---------- pack work ----------
+        tasks = [
+            (idx, ts, model_info, phyid_tau, phyid_kind, phyid_redundancy)
+            for idx, ts in multi_prompt_time_series.prompts.items()
+        ]
+
+        # ---------- launch pool ----------
+        if n_workers is None:
+            n_workers = os.cpu_count() or 1
+            print(f"Using all {n_workers} CPU cores for parallel processing.", flush=True)
+
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context("spawn")) as pool:
+            futures = [pool.submit(cls._build_one_prompt, t) for t in tasks]
+
+            iterable = as_completed(futures)
+            iterable = tqdm(iterable, total=len(futures), desc="Phy-ID")
+
+            for fut in iterable:
+                idx, phyid = fut.result()            # propagate exceptions here
+                obj.prompts[idx] = phyid
+
+        return obj
+
 
     def get_prompt(self, prompt_index: int) -> PromptPhyID:
         """Retrieve the PromptPhyID for a given prompt index."""

@@ -89,7 +89,7 @@ class ActivationRecorder:
             messages = [{"role": "user", "content": prompt}]
             return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         elif prompt_template == 'base':
-            return "### Instruction:\n{prompt}\n\n### Response:\n"
+            return f"Question: {prompt}\n Answer: "
         elif prompt_template == 'no':
             return prompt
         else:
@@ -107,8 +107,8 @@ class ActivationRecorder:
         # Attach hooks before generation
         self.attach_hooks()
 
-        for prompt_id, prompt_text in enumerate(prompts):
-            print(f'\n\n\n\n\nWorking on prompt {prompt_id}: {prompt_text}\n\n\n\n\n')
+        for prompt_id, prompt_text in enumerate(self.prompts):
+            print(f'Working on prompt {prompt_id}: {prompt_text}\n')
             self._current_prompt_id = prompt_id
             self._current_prompt_text = prompt_text
             self._current_step_index = 0 # This will be incremented inside the hooks
@@ -141,7 +141,7 @@ class ActivationRecorder:
             prompt_acts.set_completion_tokens(completion_tokens)
             prompt_acts.set_prompt_completion(completion_text)
 
-            print(f"\n\n\nPrompt {prompt_id} completed: {completion_text}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
+            print(f"Prompt {prompt_id} completed: {completion_text}\n")
 
         # Remove hooks and return
         self.remove_hooks()

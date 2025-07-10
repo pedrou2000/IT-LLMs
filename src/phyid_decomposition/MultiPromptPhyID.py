@@ -158,6 +158,26 @@ class PromptPhyID:
     phyid: Dict[Tuple[int, int, int, int], PhyIDTimeSeries] = field(default_factory=dict, init=False, repr=False) # (source_layer_index, source_node_index, target_layer_index, target_node_index) -> PhyIDTimeSeries
     data_array: Union[xr.DataArray, None] = field(default=None, init=False, repr=False)
 
+    @property 
+    def num_layers(self) -> int:
+        """Return the number of layers in the model."""
+        return self.model_info.num_layers
+    
+    @property
+    def num_nodes_per_layer(self) -> int:
+        """Return the number of nodes per layer in the model."""
+        # Measure the number of nodes in the first layer, assuming all layers have the same number of nodes
+        if self.num_layers == 0:
+            return 0
+        first_layer = next(iter(self.phyid.values())).source_layer_index
+        return len([k for k in self.phyid if k[0] == first_layer])
+    
+    @property
+    def num_nodes(self) -> int:
+        """Return the total number of nodes across all layers in the model."""
+        return self.num_layers * self.num_nodes_per_layer
+        
+
     def get_phyid(self, source_layer_index: int, source_node_index: int, target_layer_index: int, target_node_index: int) -> PhyIDTimeSeries:
         """Retrieve or create a PhyIDTimeSeries for the given indices."""
         key = (source_layer_index, source_node_index, target_layer_index, target_node_index)
@@ -444,8 +464,7 @@ class MultiPromptPhyID:
         Stack per-prompt Φ-ID DataArrays into one 7-D array.
 
         Output dims:
-            [prompt, atom, source_layer, source_node,
-            target_layer, target_node, time]
+            [prompt, atom, source_layer, source_node, target_layer, target_node, time]
         """
         # 1. Build (or fetch) each prompt-level DataArray
         da_list, prompt_labels = [], []

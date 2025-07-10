@@ -35,3 +35,4 @@ htmlcov/
 
 # Personalized configuration files
 data/
+logs/

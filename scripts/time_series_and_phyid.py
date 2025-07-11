@@ -34,13 +34,15 @@ def main():
                      plot_dir=cfg.paths.plot_time_series_dir)
 
     print("Creating phyid decomposition from time series...", flush=True)
-    phyid_comp = MultiPromptPhyID.from_time_series_parallel( 
+    phyid = MultiPromptPhyID.from_time_series( 
         time_series,
         phyid_tau        = cfg.phyid.tau,
         phyid_kind       = cfg.phyid.kind,
         phyid_redundancy = cfg.phyid.redundancy,
     )
-    phyid_comp.save(file_path=cfg.paths.data_phyid_file)
+    phyid.build_data_array()
+    phyid.save_data_array(file_path=cfg.paths.data_phyid_file_data_array)
+    # phyid_comp.save(file_path=cfg.paths.data_phyid_file)
 
 
 # ----------------------------------------------------------------------

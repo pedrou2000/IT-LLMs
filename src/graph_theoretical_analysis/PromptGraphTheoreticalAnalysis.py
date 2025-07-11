@@ -6,6 +6,7 @@ import networkx as nx
 from bct import efficiency_wei, modularity_louvain_und
 import xarray as xr
 from scipy import sparse
+from functools import cached_property
 
 from src.utils import ModelInformation
 from src.phyid_decomposition import PromptPhyID
@@ -25,14 +26,13 @@ class AtomConnectivityGraph:
         """Return a dense NumPy copy of the adjacency matrix."""
         return self.graph.toarray() if sparse.issparse(self.graph) else self.graph
 
-    @property
+    @cached_property
     def global_efficiency(self) -> float:
         """ Calculate the global efficiency of the graph. Global efficiency is defined as the 
         average inverse shortest path length between all pairs of nodes. """
         return efficiency_wei(self._dense())
 
-    
-    @property
+    @cached_property
     def modularity(self) -> float:
         """ Calculate the local efficiency of the graph. Local efficiency is defined as the 
         average global efficiency of the subgraphs formed by removing each node and its incident edges. """

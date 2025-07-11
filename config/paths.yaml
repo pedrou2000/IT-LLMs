@@ -14,6 +14,7 @@ paths:
   
   data_phyid_dir: ${paths.data_dir}phyid/${paths.phyid_method}
   data_phyid_file: ${paths.data_phyid_dir}multi_prompt_phyid.pkl
+  data_phyid_file_data_array: ${paths.data_phyid_dir}multi_prompt_phyid.nc
 
 
   # plot directories

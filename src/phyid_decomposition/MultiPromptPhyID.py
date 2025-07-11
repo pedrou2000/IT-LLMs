@@ -13,6 +13,10 @@ from datetime import timedelta
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm.auto import tqdm
 import multiprocessing
+import json, pathlib, dataclasses
+import pandas as pd
+from functools import cached_property
+
 
 from phyid.calculate import calc_PhiID 
 
@@ -142,7 +146,10 @@ class PhyIDTimeSeries:
         mi = self.mutual_information
         for atom in self.get_atoms_names():
             setattr(self, f"{atom}_normalized", getattr(self, atom) / mi)
-        
+
+        # Synergy minus redundancy ranks
+        syn_minus_red = self.sts - self.rtr 
+        syn_minus_red_rank = np.argsort(syn_minus_red)[::-1]  # descending order
 
     def get_atoms_names(self) -> List[str]:
         """Return the names of the atoms in this PhyIDTimeSeries."""
@@ -175,8 +182,7 @@ class PromptPhyID:
     @property
     def num_nodes(self) -> int:
         """Return the total number of nodes across all layers in the model."""
-        return self.num_layers * self.num_nodes_per_layer
-        
+        return self.num_layers * self.num_nodes_per_layer        
 
     def get_phyid(self, source_layer_index: int, source_node_index: int, target_layer_index: int, target_node_index: int) -> PhyIDTimeSeries:
         """Retrieve or create a PhyIDTimeSeries for the given indices."""
@@ -288,6 +294,84 @@ class PromptPhyID:
             attrs=dict(model=str(self.model_info.model_name)),
         )
         return self.data_array
+
+    @cached_property
+    def syn_minus_red_rank(self) -> np.ndarray:
+        """Ranks sources by average (sts - rtr), aggregated over target and time."""
+
+        if self.data_array is None:
+            self.build_data_array()
+
+        # Step 1: Stack into flat source/target coordinates
+        da = self.data_array.stack(
+            target=("target_layer", "target_node"),
+        )
+
+        # Step 2: Select atoms
+        sts = da.sel(atom="sts")  # shape: (source, target, time)
+        rtr = da.sel(atom="rtr")  # same shape
+
+        # Step 3: Compute difference and aggregate over target and time
+        diff = sts - rtr  # shape: (source, target, time)
+        avg_per_source = diff.mean(dim=["source_node", "target", "time"])  # shape: (source,)
+
+        # Step 4: Rank sources in descending order of (sts - rtr)
+        rank = avg_per_source.argsort()[::-1].values  # np.ndarray of ranked indices
+
+        return rank
+
+    @cached_property
+    def syn_rank_minus_red_rank(self) -> np.ndarray:
+        """Ranks sources by average (sts - rtr), aggregated over target and time."""
+
+        if self.data_array is None:
+            self.build_data_array()
+
+        # Step 1: Stack into flat source/target coordinates
+        da = self.data_array.stack(
+            target=("target_layer", "target_node"),
+        )
+
+        # Step 2: Select atoms
+        sts = da.sel(atom="sts")  # shape: (source, target, time)
+        rtr = da.sel(atom="rtr")  # same shape
+
+        # Step 3: Compute difference and aggregate over target and time
+        sts_ranked = sts.mean(dim=["source_node", "target", "time"])  # shape: (source,)
+        sts_ranked = sts_ranked.argsort()[::-1].values  # np.ndarray of ranked indices
+
+        rtr_ranked = rtr.mean(dim=["source_node", "target", "time"])  # shape: (source,)
+        rtr_ranked = rtr_ranked.argsort()[::-1].values  # np.ndarray of ranked indices
+
+        # Step 3: Compute difference and aggregate over target and time
+        rank = sts_ranked - rtr_ranked  # shape: (source,)
+
+        return rank
+
+    def plot_syn_minus_red_rank(self, atom="syn_minus_red_rank", plot_dir: Union[str, None] = None) -> None:
+        """Plot the rank of sources by average (sts - rtr)."""
+        if self.data_array is None:
+            self.build_data_array()
+
+        rank = getattr(self, atom)
+        plt.figure(figsize=(10, 6))
+        plt.plot(rank, marker='o', linestyle='-', color='blue')
+        plt.title("Source Nodes Ranked by Average (STS - RTR)")
+        plt.xlabel("Source Node Index")
+        plt.ylabel("Rank")
+        plt.grid(True, linestyle="--", alpha=0.5)
+        plt.tight_layout()
+        
+        if plot_dir:
+            plot_dir = os.path.join(plot_dir, "syn_minus_red_rank")
+            if not os.path.exists(plot_dir):
+                os.makedirs(plot_dir, exist_ok=True)
+            save_file = os.path.join(plot_dir, "rank_plot.png")
+            plt.savefig(save_file, dpi=300)
+            plt.close()
+            print(f"Plot saved to {save_file}")
+        else:
+            plt.show()
 
     # ------------------------------------------------------------------
     # Convenience reductions & plots
@@ -474,7 +558,7 @@ class MultiPromptPhyID:
             prompt_labels.append(p_idx)
 
         # 2. Concatenate along a new 'prompt' dimension
-        big = xr.concat(da_list, dim=xr.Index(prompt_labels, name="prompt"))
+        big = xr.concat(da_list, dim=pd.Index(prompt_labels, name="prompt"))
 
         # 3. Attach model-level attrs / encoding as needed
         big.attrs.update(model=str(self.model_info.model_name))
@@ -488,7 +572,7 @@ class MultiPromptPhyID:
         whose Φ-ID time-series are the mean over prompts, **without**
         collapsing node-pair or time dimensions.
         """
-        da = self.data_array or self.build_data_array()
+        da = self.data_array if self.data_array is not None else self.build_data_array()
         avg_da = da.mean(dim="prompt") # [atom, source_layer, …, time]
 
         # ------------------------------------------------------------------
@@ -502,6 +586,7 @@ class MultiPromptPhyID:
 
         # Enumerate every node-pair coordinate once
         for sl in avg_da.coords["source_layer"].values:
+            print(f"Processing source layer {sl}...")  # Debug output
             for sn in avg_da.coords["source_node"].values:
                 for tl in avg_da.coords["target_layer"].values:
                     for tn in avg_da.coords["target_node"].values:
@@ -554,3 +639,45 @@ class MultiPromptPhyID:
         except Exception as e:
             print(f"Error while loading MultiPromptPhyID from '{file_path}': {e}")
             raise
+    
+    def save_data_array(self, file_path: str, *, compression_level: int = 5,) -> None:
+        """ Persist only the Φ-ID DataArray (NetCDF) **including model_info**. """
+        da = self.data_array if self.data_array is not None else self.build_data_array()
+
+        # ------------------------------------------------------------------
+        # 1 · Serialize `ModelInformation` as JSON and stuff it in .attrs
+        # ------------------------------------------------------------------
+        mi_dict = self.model_info.__dict__
+        da.attrs["model_info_json"] = json.dumps(mi_dict)
+
+        # ------------------------------------------------------------------
+        # 2 · Write NetCDF with compression
+        # ------------------------------------------------------------------
+        path = pathlib.Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        DATA_VAR = da.name if da.name else "phiid"
+        encoding = {DATA_VAR: dict(zlib=True, complevel=compression_level)}
+
+        da.to_netcdf(path, encoding=encoding, engine="netcdf4")
+        print(f"Φ-ID DataArray + model metadata saved → {path}")
+
+    @classmethod
+    def load_from_data_array(cls, file_path: str) -> "MultiPromptPhyID":
+        """
+        Recreate a thin MultiPromptPhyID wrapper, restoring `model_info`
+        from the JSON stored in the NetCDF file.
+        """
+        da = xr.open_dataarray(file_path)
+
+        # ----- rebuild ModelInformation -----
+        if "model_info_json" not in da.attrs:
+            raise ValueError("model_info_json attribute missing from file.")
+
+        mi_dict = json.loads(da.attrs["model_info_json"])
+        model_info = ModelInformation.from_dict(mi_dict)
+
+        # ----- return a lightweight wrapper -----
+        obj = cls(model_info)
+        obj.data_array = da
+        return obj

@@ -1,8 +1,6 @@
-from .MultiPromptPhyID import (
-    MultiPromptPhyID,
-    PromptPhyID,
-    PhyIDTimeSeries,
-)
+from .MultiPromptPhyID import MultiPromptPhyID
+from .PromptPhyID import PromptPhyID
+from .PhyIDTimeSeries import PhyIDTimeSeries
 
 __all__ = [
     "MultiPromptPhyID",

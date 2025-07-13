@@ -1,7 +1,7 @@
 defaults:
   - paths
-  - model: D2-16-A2 
-  - generation: base
+  - model: D2-16-A2
+  - generation: original_prompts
   - time_series: attention_outputs
   - phyid: base
 

@@ -10,6 +10,8 @@ from datetime import timedelta
 from tqdm.auto import tqdm
 import pandas as pd
 from functools import cached_property
+import json
+import pathlib
 
 
 
@@ -307,3 +309,74 @@ class PromptPhyID:
         else:
             plt.show()
 
+    def save(self, file_path: str) -> None:
+        """Save the PromptPhyID object to a pickle file within the specified directory."""
+        dir_path = os.path.dirname(file_path)
+        try:
+            if not os.path.isdir(dir_path):
+                os.makedirs(dir_path, exist_ok=True)
+            with open(file_path, "wb") as f:
+                pickle.dump(self, f)
+            print(f"PromptPhyID successfully saved to '{file_path}'.")
+        except Exception as e:
+            print(f"Error while saving PromptPhyID to '{dir_path}': {e}")
+            raise
+    
+    @classmethod
+    def load(cls, file_path: str) -> "PhyIDTimeSeries":
+        """Load a PromptPhyID object from a pickle file."""
+        try:
+            with open(file_path, "rb") as f:
+                obj = pickle.load(f)
+            print(f"PromptPhyID successfully loaded from '{file_path}'.")
+            return obj
+        except Exception as e:
+            print(f"Error while loading PromptPhyID from '{file_path}': {e}")
+            raise
+
+    def save_data_array(self, file_path: str, *, compression_level: int = 5) -> None:
+        """
+        Persist the Φ-ID 6-D DataArray to NetCDF format.
+
+        Parameters
+        ----------
+        file_path : str
+            Destination .nc path.
+        compression_level : int, default 5
+            zlib compression level (0-9).
+        """
+        da = self.data_array if self.data_array is not None else self.build_data_array()
+
+        # 2 -- Store ModelInformation in attrs
+        da.attrs["model_info_json"] = json.dumps(self.model_info.__dict__)
+
+        # 3 -- Write chunk-wise
+        path = pathlib.Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        DATA_VAR = da.name or "phiid"
+        encoding = {DATA_VAR: dict(zlib=True, complevel=compression_level)}
+
+        # compute=True → stream one chunk at a time
+        da.to_netcdf(path, engine="netcdf4", encoding=encoding)
+        # da.to_netcdf(path, engine="netcdf4", encoding=encoding, compute=True)
+        print(f"Φ-ID DataArray saved → {path}")
+
+    @classmethod
+    def load_from_data_array(cls, file_path: str) -> "PhyIDTimeSeries":
+        """
+        Load a chunked NetCDF produced by `save_data_array`.
+        Keeps the DataArray lazy (one-prompt chunks).
+        """
+        # 1 -- Open lazily; let xarray/dask respect on-disk chunking
+        da = xr.open_dataarray(file_path, chunks={"prompt": 1})
+
+        # 2 -- Restore ModelInformation
+        if "model_info_json" not in da.attrs:
+            raise ValueError("model_info_json attribute missing from file.")
+        model_info = ModelInformation.from_dict(json.loads(da.attrs["model_info_json"]))
+
+        # 3 -- Wrap in lightweight MultiPromptPhyID
+        obj = cls(model_info)
+        obj.data_array = da
+        return obj

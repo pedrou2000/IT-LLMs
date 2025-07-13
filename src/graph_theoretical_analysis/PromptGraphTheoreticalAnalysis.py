@@ -10,7 +10,7 @@ from functools import cached_property
 
 from src.utils import ModelInformation
 from src.phyid_decomposition import PromptPhyID
-from src.utils import get_layer_node_indeces, get_node_index
+from src.utils import get_layer_node_indeces, get_node_index, get_layer_modules
 
 
 
@@ -37,6 +37,21 @@ class AtomConnectivityGraph:
         """ Calculate the local efficiency of the graph. Local efficiency is defined as the 
         average global efficiency of the subgraphs formed by removing each node and its incident edges. """
         return modularity_louvain_und(self._dense())[1]
+
+    def participation_coeff_layer(self) -> np.ndarray:
+        """ Calculate the participation coefficient for each node in the graph. """
+        A = self._dense()           # (V, V)
+        num_layers = self.model_info.num_layers
+        num_nodes_per_layer = A.shape[0] // num_layers
+        modules = get_layer_modules(num_nodes_per_layer, num_layers)
+        k_i = A.sum(axis=1)         # node strength
+
+        pc_sum = np.zeros_like(k_i)
+        for mod in modules:
+            k_is = A[:, mod].sum(axis=1)   # strength to module s
+            pc_sum += (k_is / k_i) ** 2
+
+        return 1.0 - pc_sum
     
     def plot_graph(self, ax=None, title: Optional[str] = None, cmap: str = "viridis", **kwargs) -> None:
         """ Plot the connectivity graph using matplotlib. """
@@ -142,3 +157,72 @@ class PromptGraphTheoreticalAnalysis:
         return self.atom_graphs[atom].modularity
 
 
+    def participation_coeff_layer(self, atom: str) -> np.ndarray:
+        return self.atom_graphs[atom].participation_coeff_layer()
+    
+    def gateways_and_broadcasters(
+        self,
+        *,
+        workspace_mask: Optional[np.ndarray] = None,   # bool mask, same |V|, or None
+    ) -> Dict[str, np.ndarray]:
+        """
+        Classifies every node (attention head) as:
+            •  'gateway'      if Δrank = rank_synergy − rank_redundancy  > 0
+            •  'broadcaster'  if Δrank < 0
+            •  'neutral'      if Δrank == 0
+
+        Parameters
+        ----------
+        synergy_atom, redundancy_atom
+            Labels of the two Φ-ID atoms in `atom_graphs` whose graphs you want to
+            compare.  Defaults assume they are named ``"sts"`` and ``"rtr"``.
+        workspace_mask
+            Optional boolean mask selecting a “workspace” subset of nodes
+            (e.g. top-30 % MI heads).  Pass ``None`` to keep all nodes.
+        return_dataframe
+            If True (default) return a tidy ``pd.DataFrame``; otherwise a plain dict
+            of NumPy arrays.
+
+        Returns
+        -------
+        pd.DataFrame or dict
+        """
+        P_syn = self.participation_coeff_layer('sts')
+        P_red = self.participation_coeff_layer('rtr')
+
+        # ranking: highest P ⇒ rank 0, next ⇒ 1 …
+        rank_syn = (-P_syn).argsort().argsort()
+        rank_red = (-P_red).argsort().argsort()
+        delta    = rank_syn - rank_red
+
+        roles = np.full_like(delta, "neutral", dtype=object)
+        roles[delta > 0] = "gateway"
+        roles[delta < 0] = "broadcaster"
+
+        # apply optional workspace filter
+        if workspace_mask is not None:
+            P_syn, P_red, delta, roles = (arr[workspace_mask] for arr in (P_syn, P_red, delta, roles))
+            node_idx = np.where(workspace_mask)[0]
+        else:
+            node_idx = np.arange(len(delta))
+        
+        # Reshape the delta per node index to layer, node index pairs
+        delta = delta.reshape(self.model_info.num_layers, -1)
+        num_nodes_per_layer = delta.shape[1]
+        # Plot the delta values for each layer and node index as a heatmap
+        plt.imshow(delta, aspect='auto', cmap='coolwarm', interpolation='nearest')
+        plt.colorbar(label='Delta Rank')
+        plt.title('Delta Rank Heatmap')
+        plt.xlabel('Node Index')
+        plt.ylabel('Layer Index')
+        plt.xticks(ticks=np.arange(num_nodes_per_layer), labels=np.arange(num_nodes_per_layer))
+        plt.yticks(ticks=np.arange(self.model_info.num_layers), labels=np.arange(self.model_info.num_layers))
+        plt.show()
+
+        return {
+            "nodes"         : node_idx,
+            "P_synergy"     : P_syn,
+            "P_redundancy"  : P_red,
+            "delta_rank"    : delta,
+            "role"          : roles,
+        }

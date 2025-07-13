@@ -10,6 +10,8 @@ from tqdm.auto import tqdm
 import multiprocessing
 import json, pathlib
 import pandas as pd
+import numpy as np
+
 
 
 from src.utils import ModelInformation
@@ -185,69 +187,71 @@ class MultiPromptPhyID:
         self.average_prompt_phyid = out
         return out
 
-    def save(self, file_path: str) -> None:
-        """Save the MultiPromptPhyID object to a pickle file within the specified directory."""
-        dir_path = os.path.dirname(file_path)
-        try:
-            if not os.path.isdir(dir_path):
-                os.makedirs(dir_path, exist_ok=True)
-            with open(file_path, "wb") as f:
-                pickle.dump(self, f)
-            print(f"MultiPromptPhyID successfully saved to '{file_path}'.")
-        except Exception as e:
-            print(f"Error while saving MultiPromptPhyID to '{dir_path}': {e}")
-            raise
+    def save(self, dir_path: str) -> None:
+        """Save the MultiPromptPhyID object by saving each PromptPhyID to a file."""
+        for p_idx, prompt in self.prompts.items():
+            file_path = os.path.join(dir_path, f"prompt_{p_idx:03d}.pickle")
+            prompt.save(file_path)
+        print(f"MultiPromptPhyID successfully saved to directory '{dir_path}'.")
     
     @classmethod
-    def load(cls, file_path: str) -> "MultiPromptPhyID":
-        """Load a MultiPromptPhyID object from a pickle file."""
-        try:
-            with open(file_path, "rb") as f:
-                obj = pickle.load(f)
-            print(f"MultiPromptPhyID successfully loaded from '{file_path}'.")
-            return obj
-        except Exception as e:
-            print(f"Error while loading MultiPromptPhyID from '{file_path}': {e}")
-            raise
+    def load(cls, dir_path: str) -> "MultiPromptPhyID":
+        """Load a MultiPromptPhyID object from the PromptPhyID files in the specified directory."""
+        prompts = {}
+        for file_name in os.listdir(dir_path):
+            if file_name.endswith(".pickle"):
+                file_path = os.path.join(dir_path, file_name)
+                prompt_index = int(file_name.split("_")[1].split(".")[0])
+                prompt = PromptPhyID.load(file_path)
+                prompts[prompt_index] = prompt
+        
+        # Create a MultiPromptPhyID object
+        model_info = prompts[0].model_info if prompts else ModelInformation()
+        obj = cls(model_info)
+        obj.prompts = prompts
+
+        print(f"MultiPromptPhyID loaded from directory: {dir_path}")
+        return obj
     
-    def save_data_array(self, file_path: str, *, compression_level: int = 5,) -> None:
-        """ Persist only the Φ-ID DataArray (NetCDF) **including model_info**. """
+    def save_data_array(self, dir_path: str, *, compression_level: int = 5) -> None:
+        """
+        Persist the Φ-ID 7-D DataArray to NetCDF with **one prompt per chunk**.
+        Optionally add further chunk specs via `extra_chunks`.
+
+        Parameters
+        ----------
+        dir_path : str
+            Destination .nc path.
+        compression_level : int, default 5
+            zlib compression level (0-9).
+        """
         da = self.data_array if self.data_array is not None else self.build_data_array()
 
-        # ------------------------------------------------------------------
-        # 1 · Serialize `ModelInformation` as JSON and stuff it in .attrs
-        # ------------------------------------------------------------------
-        mi_dict = self.model_info.__dict__
-        da.attrs["model_info_json"] = json.dumps(mi_dict)
-
-        # ------------------------------------------------------------------
-        # 2 · Write NetCDF with compression
-        # ------------------------------------------------------------------
-        path = pathlib.Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        DATA_VAR = da.name if da.name else "phiid"
-        encoding = {DATA_VAR: dict(zlib=True, complevel=compression_level)}
-
-        da.to_netcdf(path, encoding=encoding, engine="netcdf4")
-        print(f"Φ-ID DataArray + model metadata saved → {path}")
+        for p_idx, prompt in self.prompts.items():
+            file_path = os.path.join(dir_path, f"prompt_{p_idx:03d}.nc")
+            prompt.save_data_array(file_path, compression_level=compression_level)
+        print(f"MultiPromptPhyID DataArray saved to directory: {dir_path}")
 
     @classmethod
-    def load_from_data_array(cls, file_path: str) -> "MultiPromptPhyID":
+    def load_from_data_array(cls, dir_path: str) -> "MultiPromptPhyID":
         """
-        Recreate a thin MultiPromptPhyID wrapper, restoring `model_info`
-        from the JSON stored in the NetCDF file.
+        Load a chunked NetCDF produced by `save_data_array`.
         """
-        da = xr.open_dataarray(file_path)
-
-        # ----- rebuild ModelInformation -----
-        if "model_info_json" not in da.attrs:
-            raise ValueError("model_info_json attribute missing from file.")
-
-        mi_dict = json.loads(da.attrs["model_info_json"])
-        model_info = ModelInformation.from_dict(mi_dict)
-
-        # ----- return a lightweight wrapper -----
+        # 1 -- Iterate over all files in the directory
+        prompts = {}
+        for file_name in os.listdir(dir_path):
+            if file_name.endswith(".nc"):
+                file_path = os.path.join(dir_path, file_name)
+                prompt_index = int(file_name.split("_")[1].split(".")[0])
+                prompt = PromptPhyID.load_from_data_array(file_path)
+                prompts[prompt_index] = prompt
+        # 2 -- Create a MultiPromptPhyID object
+        model_info = prompts[0].model_info if prompts else ModelInformation()
         obj = cls(model_info)
-        obj.data_array = da
+
+        # 3 -- Create the data_array by concatenating all prompts into a single DataArray
+        da_list = [prompt.data_array for prompt in prompts.values()]
+        obj.data_array = xr.concat(da_list, dim=pd.Index(list(prompts.keys()), name="prompt"))
+
+        print(f"MultiPromptPhyID loaded from directory: {dir_path}")
         return obj

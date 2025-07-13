@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Sequence, Union, Tuple
 import numpy as np
 
-
 from phyid.calculate import calc_PhiID 
 
 from src.utils import ModelInformation

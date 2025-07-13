@@ -1,3 +1,5 @@
+from typing import Dict, List
+
 def get_layer_node_indeces(node_idx: int, num_nodes_per_layer: int) -> tuple[int, int]:
     """
     Get the layer and node indices for a given node index in the model.
@@ -20,3 +22,13 @@ def get_node_index(layer_index: int, node_index: int, num_nodes_per_layer: int) 
     :return: The computed node index.
     """
     return layer_index * num_nodes_per_layer + node_index
+
+def get_layer_modules(num_nodes_per_layer, num_layers) -> List[List[int]]:
+    """
+    One sub-list per Transformer layer, each containing the *flat* node
+    indices of every attention head in that layer.
+    """
+    return [
+        list(range(layer_index * num_nodes_per_layer, (layer_index + 1) * num_nodes_per_layer))
+        for layer_index in range(num_layers)
+    ]

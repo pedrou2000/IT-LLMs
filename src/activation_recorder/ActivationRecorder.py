@@ -166,7 +166,10 @@ class ActivationRecorder:
         if self._current_prompt_id is None:
             return
 
-        _, activations, _ = module_output
+        activations = module_output[1] # The second element contains the activations
+
+        for key, value in activations.items():
+            print(f"Attention activations for {key} in layer {layer_idx}: {value.shape if hasattr(value, 'shape') else value}")
 
         
         assert layer_idx == activations['layer_idx'], f'Layer index mismatch: {layer_idx} != {activations["layer_idx"]}'

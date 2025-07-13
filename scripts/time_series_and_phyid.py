@@ -39,10 +39,10 @@ def main():
         phyid_tau        = cfg.phyid.tau,
         phyid_kind       = cfg.phyid.kind,
         phyid_redundancy = cfg.phyid.redundancy,
+        # n_workers        = 8,
     )
     phyid.build_data_array()
-    phyid.save_data_array(file_path=cfg.paths.data_phyid_file_data_array)
-    # phyid_comp.save(file_path=cfg.paths.data_phyid_file)
+    phyid.save_data_array(dir_path=cfg.paths.data_phyid_dir, compression_level=0)
 
 
 # ----------------------------------------------------------------------

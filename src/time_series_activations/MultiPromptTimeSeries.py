@@ -193,7 +193,7 @@ class PromptTimeSeries:
             if ticks_all_layers:
                 for ax in axes:
                     ax.set_xticks(range(len(labels)))
-                    ax.set_xticklabels(labels, rotation=0, fontsize="small")
+                    ax.set_xticklabels(labels, rotation=90, fontsize="small")
                     ax.tick_params(labelbottom=True)  # 👈 force showing labels
 
         # configure shared x‑axis

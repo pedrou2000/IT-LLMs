@@ -36,7 +36,8 @@ class MultiPromptPhyID:
         multi_prompt_time_series: MultiPromptTimeSeries,
         phyid_tau: int = 1,
         phyid_kind: Literal["gaussian", "discrete"] = "gaussian",
-        phyid_redundancy: Literal["MMI", "CCS"] = "MMI"
+        phyid_redundancy: Literal["MMI", "CCS"] = "MMI",
+        save_dir_path: str | None = None,
     ) -> "MultiPromptPhyID":
         """Create a new ``MultiPromptPhyID`` from a ``MultiPromptTimeSeries``."""
         model_info = multi_prompt_time_series.model_info
@@ -46,8 +47,8 @@ class MultiPromptPhyID:
             # Create a PromptPhyID for each prompt
             print(f"Processing prompt {prompt_index+1}/{len(multi_prompt_time_series.prompts)} with {len(prompt_ts.generated_tokens)} generated tokens.")
             generated_tokens = prompt_ts.generated_tokens
-            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, 
-                                                         phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy)
+            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
+                                                          phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path)
             obj.prompts[prompt_index] = prompt_phi_id
 
         return obj
@@ -190,7 +191,7 @@ class MultiPromptPhyID:
     def save(self, dir_path: str) -> None:
         """Save the MultiPromptPhyID object by saving each PromptPhyID to a file."""
         for p_idx, prompt in self.prompts.items():
-            file_path = os.path.join(dir_path, f"prompt_{p_idx:03d}.pickle")
+            file_path = os.path.join(dir_path, f"prompt_{p_idx:03d}.pkl")
             prompt.save(file_path)
         print(f"MultiPromptPhyID successfully saved to directory '{dir_path}'.")
     
@@ -199,7 +200,7 @@ class MultiPromptPhyID:
         """Load a MultiPromptPhyID object from the PromptPhyID files in the specified directory."""
         prompts = {}
         for file_name in os.listdir(dir_path):
-            if file_name.endswith(".pickle"):
+            if file_name.endswith(".pkl"):
                 file_path = os.path.join(dir_path, file_name)
                 prompt_index = int(file_name.split("_")[1].split(".")[0])
                 prompt = PromptPhyID.load(file_path)

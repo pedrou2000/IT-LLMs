@@ -57,10 +57,22 @@ class PromptPhyID:
     
     @classmethod
     def from_time_series(cls, prompt_time_series: PromptTimeSeries, model_info: ModelInformation, prompt_index: int, generated_tokens: Sequence[str] = None,
-                         phyid_tau: int = 1, phyid_kind: Literal["gaussian", "discrete"] = "gaussian", phyid_redundancy: Literal["MMI", "CCS"] = "MMI") -> "PromptPhyID":
+                         phyid_tau: int = 1, phyid_kind: Literal["gaussian", "discrete"] = "gaussian", phyid_redundancy: Literal["MMI", "CCS"] = "MMI",
+                         save_dir_path: Union[str, None] = None) -> "PromptPhyID":
         """Create a new PromptPhyID with the given prompt index and model information."""
+        if save_dir_path:
+            save_file = os.path.join(save_dir_path, f"prompt_{prompt_index}.pkl")
+            
+            # Check if the file already exists
+            if os.path.exists(save_file):
+                print(f"PromptPhyID already exists at {save_file}. Loading existing object.")
+                return cls.load(save_file)
+
         obj = cls(prompt_index, model_info, generated_tokens=generated_tokens)
         obj._compute_phyid(prompt_time_series, model_info, phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy)
+        if save_dir_path:
+            obj.save(save_file)
+            print(f"PromptPhyID saved to {save_file}")
         return obj
 
     def _compute_phyid(self, prompt_time_series: PromptTimeSeries, model_info: ModelInformation, phyid_tau: int = 1, 

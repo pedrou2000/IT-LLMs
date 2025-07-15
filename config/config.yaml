@@ -2,6 +2,6 @@ defaults:
   - paths
   - model: D2-16-A2
   - generation: original_prompts
-  - time_series: attention_outputs
-  - phyid: base
+  - time_series: expert_output
+  - phyid: discrete
 

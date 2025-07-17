@@ -138,8 +138,13 @@ class MultiPromptPhyID:
         self.data_array = big
 
         return big
+    
+    def release_prompt_phyids(self) -> None:
+        """Release the memory used by all PromptPhyID objects."""
+        self.prompts.clear()
+        print("Released the PromptPhyID prompts attribute and cleared memory.")
 
-    def compute_average_prompt_phyid(self) -> PromptPhyID:
+    def compute_average_prompt_phyid(self, save_dir_path: str | None = None) -> PromptPhyID:
         """
         Build (if necessary) the 7-D DataArray, then produce a PromptPhyID
         whose Φ-ID time-series are the mean over prompts, **without**
@@ -159,7 +164,7 @@ class MultiPromptPhyID:
 
         # Enumerate every node-pair coordinate once
         for sl in avg_da.coords["source_layer"].values:
-            print(f"Processing source layer {sl}...")  # Debug output
+            print(f"Processing source layer {sl}...", flush=True)
             for sn in avg_da.coords["source_node"].values:
                 for tl in avg_da.coords["target_layer"].values:
                     for tn in avg_da.coords["target_node"].values:
@@ -186,7 +191,78 @@ class MultiPromptPhyID:
                         out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
 
         self.average_prompt_phyid = out
+
+        if save_dir_path is not None:
+            self.save_averarge_prompt_phyid(dir_path=save_dir_path) if save_dir_path else None
+        
         return out
+
+    def compute_average_prompt_phyid_stream(self, save_dir_path: str | None = None, dtype: str = "float16") -> PromptPhyID:
+        """
+        Compute the average Φ‑ID over prompts **without ever holding
+        more than one prompt in memory**.
+
+        1. Iterate through each PromptPhyID.
+        2. Convert it to an xarray.DataArray and add to an accumulator.
+        3. After the loop, divide by N and rebuild a synthetic PromptPhyID.
+        """
+        import gc
+
+        running_sum: xr.DataArray | None = None
+        n = 0
+
+        for prompt in self.prompts.values():
+            print(f"Processing prompt {n+1}/{len(self.prompts)}...", flush=True)
+            da = prompt.build_data_array().astype(dtype)   # one prompt in RAM
+            print("Built prompt array")
+            # running_sum = da.copy(deep=True) if running_sum is None else running_sum + da
+            running_sum = da if running_sum is None else running_sum + da
+            n += 1
+            # del da                                     #  ↙ immediately drop
+            del prompt                             #  ↘ to free memory
+            gc.collect()
+
+        avg_da = running_sum / n                       # still only one copy
+        del running_sum
+        gc.collect()
+
+        # ------------------------------------------------------------------
+        # Re‑wrap in a synthetic PromptPhyID *without* copy‑heavy `.values`
+        # ------------------------------------------------------------------
+        print(f"Computed average PromptPhyID over {n} prompts, wrapping it...", flush=True)
+        out = PromptPhyID(
+            prompt_index=-1,
+            model_info=self.model_info,
+            generated_tokens=[],
+        )
+
+        for (sl, sn, tl, tn), sub in avg_da.groupby(
+            ["source_layer", "source_node", "target_layer", "target_node"]
+        ):
+            phy_ts = PhyIDTimeSeries(
+                model_info=self.model_info,
+                source_layer_index=int(sl),
+                source_node_index=int(sn),
+                target_layer_index=int(tl),
+                target_node_index=int(tn),
+            )
+            for atom in sub.coords["atom"].values:
+                # Keep xarray slice — no NumPy copy
+                setattr(phy_ts, atom, sub.sel(atom=atom))
+            out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
+
+        self.average_prompt_phyid = out
+        if save_dir_path:
+            self.save_averarge_prompt_phyid(dir_path=save_dir_path)
+        return out
+
+
+    def save_averarge_prompt_phyid(self, dir_path: str) -> None:
+        """Save the average prompt Φ-ID to a file."""
+        file_path = os.path.join(dir_path, "average.pkl")
+        with open(file_path, "wb") as f:
+            pickle.dump(self.average_prompt_phyid, f)
+        print(f"Average PromptPhyID saved to {file_path}")
 
     def save(self, dir_path: str) -> None:
         """Save the MultiPromptPhyID object by saving each PromptPhyID to a file."""
@@ -202,6 +278,7 @@ class MultiPromptPhyID:
         for file_name in os.listdir(dir_path):
             if file_name.endswith(".pkl"):
                 file_path = os.path.join(dir_path, file_name)
+                print(f"Loading PromptPhyID from {file_path}")
                 prompt_index = int(file_name.split("_")[1].split(".")[0])
                 prompt = PromptPhyID.load(file_path)
                 prompts[prompt_index] = prompt
@@ -256,3 +333,16 @@ class MultiPromptPhyID:
 
         print(f"MultiPromptPhyID loaded from directory: {dir_path}")
         return obj
+
+    @staticmethod
+    def load_average_prompt_phyid(dir_path: str) -> PromptPhyID:
+        """Load the average prompt Φ-ID from a file."""
+        file_path = os.path.join(dir_path, "average.pkl")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Average PromptPhyID file not found: {file_path}")
+        
+        with open(file_path, "rb") as f:
+            average_prompt_phyid = pickle.load(f)
+        
+        print(f"Average PromptPhyID loaded from {file_path}")
+        return average_prompt_phyid

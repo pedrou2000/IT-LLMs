@@ -48,6 +48,25 @@ class PromptPhyID:
         """Return the total number of nodes across all layers in the model."""
         return self.num_layers * self.num_nodes_per_layer        
 
+    @cached_property
+    def synergy_minus_redundancy_rank(self) -> List[Tuple[int, int]]:
+        """Ranks sources by average (sts - rtr), aggregated over target and time, from most to least synergistic. """
+        if self.data_array is None:
+            self.build_data_array()
+        da = self.data_array.copy()
+
+        # Step 1: Compute the mean across all dimensions except 'atom', 'source_layer', 'source_node'
+        da = da.mean(dim=[ "target_layer", "target_node", "time"]) # shape: (atom, source_layer, source_node)
+
+        # Step 2: Compute the difference between 'sts' and 'rtr'
+        diff = da.sel(atom="sts") - da.sel(atom="rtr")  # shape: (source_layer, source_node) 
+
+        # Step 3: Compute the rank of sources in descending order of (sts - rtr), ranked by pairs of (source_layer, source_node)
+        rank = diff.stack(source=("source_layer", "source_node")).argsort(dim="source", ascending=False).values  # np.ndarray of ranked indices
+        
+        return rank # Shape: (num_source_nodes,) from most to least synergistic
+
+
     def get_phyid(self, source_layer_index: int, source_node_index: int, target_layer_index: int, target_node_index: int) -> PhyIDTimeSeries:
         """Retrieve or create a PhyIDTimeSeries for the given indices."""
         key = (source_layer_index, source_node_index, target_layer_index, target_node_index)
@@ -119,7 +138,9 @@ class PromptPhyID:
 
     def compute_extra_atoms(self) -> None:
         """Compute additional atoms for all PhyIDTimeSeries in this prompt."""
-        for phyid_ts in self.phyid.values():
+        for (source_layer_index, source_node_index, target_layer_index, target_node_index), phyid_ts in self.phyid.items():
+            if source_node_index == 0 and target_layer_index == 1 and target_node_index == 0:
+                print(f"Computing extra atoms for layer {source_layer_index}, node {source_node_index} → layer {target_layer_index}, node {target_node_index}")
             phyid_ts.compute_extra_atoms()
     
     def get_atoms_names(self) -> List[str]:
@@ -172,29 +193,45 @@ class PromptPhyID:
         return self.data_array
 
     @cached_property
-    def syn_minus_red_rank(self) -> np.ndarray:
-        """Ranks sources by average (sts - rtr), aggregated over target and time."""
+    def syn_minus_red_rank(self) -> xr.DataArray:
+        """
+        Rank every (source_layer, source_node) pair by descending
+        (synergy − redundancy), averaged over *target* and *time*.
 
+        Returns
+        -------
+        xr.DataArray
+            dims:   ("source_layer", "source_node")
+            values: integer in [1, N]                │ 1 ⇒ highest (sts − rtr)
+                                                    │ N ⇒ lowest  (sts − rtr)
+        """
+        # 1) Make sure the Φ‑ID data are loaded
         if self.data_array is None:
             self.build_data_array()
 
-        # Step 1: Stack into flat source/target coordinates
-        da = self.data_array.stack(
-            target=("target_layer", "target_node"),
+        # 2) (sts − rtr) and average over target & time
+        diff = (
+            self.data_array.sel(atom="sts") - self.data_array.sel(atom="rtr")
+        ).mean(dim=["target_layer", "target_node", "time"])       # → (L, N)
+
+        # 3) Flatten, sort by *descending* value, and assign ranks 1…N
+        flat = diff.values.ravel()                                # shape (L·N,)
+        order = np.argsort(flat)                                 # indices, high→low
+        ranks_flat = np.empty_like(order, dtype=np.int64)
+        ranks_flat[order] = np.arange(1, flat.size + 1)           # 1..N
+
+        # 4) Reshape back and wrap in an xarray DataArray
+        rank_da = xr.DataArray(
+            ranks_flat.reshape(diff.shape),
+            coords=diff.coords,
+            dims=diff.dims,
+            name="syn_minus_red_rank",
+            attrs=dict(
+                description="Rank of (source_layer, source_node) pairs by descending (sts - rtr), averaged over target and time.",
+            ),
         )
 
-        # Step 2: Select atoms
-        sts = da.sel(atom="sts")  # shape: (source, target, time)
-        rtr = da.sel(atom="rtr")  # same shape
-
-        # Step 3: Compute difference and aggregate over target and time
-        diff = sts - rtr  # shape: (source, target, time)
-        avg_per_source = diff.mean(dim=["source_node", "target", "time"])  # shape: (source,)
-
-        # Step 4: Rank sources in descending order of (sts - rtr)
-        rank = avg_per_source.argsort()[::-1].values  # np.ndarray of ranked indices
-
-        return rank
+        return rank_da
 
     @cached_property
     def syn_rank_minus_red_rank(self) -> np.ndarray:
@@ -224,19 +261,15 @@ class PromptPhyID:
 
         return rank
 
-    def plot_syn_minus_red_rank(self, atom="syn_minus_red_rank", plot_dir: Union[str, None] = None) -> None:
+    def plot_syn_minus_red_rank_per_node(self, rank_da, plot_dir: Union[str, None] = None) -> None:
         """Plot the rank of sources by average (sts - rtr)."""
-        if self.data_array is None:
-            self.build_data_array()
-
-        rank = getattr(self, atom)
         plt.figure(figsize=(10, 6))
-        plt.plot(rank, marker='o', linestyle='-', color='blue')
-        plt.title("Source Nodes Ranked by Average (STS - RTR)")
-        plt.xlabel("Source Node Index")
-        plt.ylabel("Rank")
-        plt.grid(True, linestyle="--", alpha=0.5)
+        sns.heatmap(rank_da, annot=True, fmt=".0f", cmap="viridis_r", cbar_kws={"label": "Synergy Minus Redundancy Rank"})
+        plt.title("Synergy–Redundancy Rank (Blue = Synergy, Yellow = Redundancy)")
+        plt.xlabel("Source Node")
+        plt.ylabel("Source Layer")
         plt.tight_layout()
+        plt.show()
         
         if plot_dir:
             plot_dir = os.path.join(plot_dir, "syn_minus_red_rank")
@@ -248,6 +281,38 @@ class PromptPhyID:
             print(f"Plot saved to {save_file}")
         else:
             plt.show()
+
+    def plot_syn_minus_red_rank_per_layer(self, rank_da, *, plot_dir: Union[str, None] = None) -> None:  
+        """Line‑and‑dot plot of 0–1‑normalized (sts−rtr) per layer (higher = more synergistic)."""
+        layer_mean = rank_da.mean(dim="source_node")
+        v_min, v_max = layer_mean.min().item(), layer_mean.max().item()
+        norm = xr.zeros_like(layer_mean) if v_min == v_max else (layer_mean - v_min) / (v_max - v_min)
+
+        xs = norm.coords["source_layer"].values
+        ys = norm.values
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(xs, ys, marker="o", linewidth=2)
+        plt.ylim(-0.05, 1.05)
+        plt.ylabel("Normalized Synergy-Redundancy Rank (0–1)")
+        plt.xlabel("Source Layer")
+        plt.title("Average Synergy–Redundancy Rank per Layer")
+        plt.grid(axis="y", linestyle="--", alpha=0.4)
+        plt.tight_layout()
+
+        if plot_dir:
+            out_dir = os.path.join(plot_dir, "syn_minus_red_rank")
+            os.makedirs(out_dir, exist_ok=True)
+            save_file = os.path.join(out_dir, "avg_synergy_score_per_layer.png")
+            plt.savefig(save_file, dpi=300)
+            plt.close()
+            print(f"Plot saved to {save_file}")
+        else:
+            plt.show()
+
+
+
+
 
     # ------------------------------------------------------------------
     # Convenience reductions & plots
@@ -320,6 +385,7 @@ class PromptPhyID:
             print(f"Heatmap saved to {save_file}")
         else:
             plt.show()
+
 
     def save(self, file_path: str) -> None:
         """Save the PromptPhyID object to a pickle file within the specified directory."""

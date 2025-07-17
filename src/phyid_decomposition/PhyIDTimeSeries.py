@@ -133,7 +133,9 @@ class PhyIDTimeSeries:
 
         # Synergy minus redundancy ranks
         syn_minus_red = self.sts - self.rtr 
+        setattr(self, "syn_minus_red", syn_minus_red)
         syn_minus_red_rank = np.argsort(syn_minus_red)[::-1]  # descending order
+        setattr(self, "syn_minus_red_rank", syn_minus_red_rank)
 
     def get_atoms_names(self) -> List[str]:
         """Return the names of the atoms in this PhyIDTimeSeries."""

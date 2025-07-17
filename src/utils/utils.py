@@ -1,4 +1,5 @@
-from typing import Dict, List
+from typing import Dict, List, Union, Tuple
+import torch
 
 def get_layer_node_indeces(node_idx: int, num_nodes_per_layer: int) -> tuple[int, int]:
     """
@@ -32,3 +33,16 @@ def get_layer_modules(num_nodes_per_layer, num_layers) -> List[List[int]]:
         list(range(layer_index * num_nodes_per_layer, (layer_index + 1) * num_nodes_per_layer))
         for layer_index in range(num_layers)
     ]
+
+def perturb_model(model, scale=10.0):
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            noise = torch.randn_like(param) * scale
+            param.data.add_(noise)
+
+
+def randomize_model_weights(model, mean=0.0, std=0.02):
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            torch.nn.init.normal_(param, mean=0.0, std=0.02)  # Or use other initializations
+

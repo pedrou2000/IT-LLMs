@@ -30,8 +30,7 @@ def main():
         projection_method   = cfg.time_series.projection_method,
         exclude_shared_expert_moe = cfg.time_series.exclude_shared_expert_moe,
     )
-    time_series.plot(token_x=True, ticks_all_layers=True,
-                     plot_dir=cfg.paths.plot_time_series_dir)
+    time_series.plot(token_x=True, ticks_all_layers=True, plot_dir=cfg.paths.plot_time_series_dir)
 
     print("Creating phyid decomposition from time series...", flush=True)
     phyid = MultiPromptPhyID.from_time_series( 
@@ -43,6 +42,15 @@ def main():
         save_dir_path = cfg.paths.data_phyid_dir,
     )
     # phyid.save(dir_path=cfg.paths.data_phyid_dir)
+    print("Building data array for phyid")
+    phyid.build_data_array()
+    print("Computing average prompt phyid")
+    phyid = phyid.compute_average_prompt_phyid(save_dir_path=cfg.paths.data_phyid_dir)
+
+    print("Plotting phyid results...", flush=True)
+    plot_dir = cfg.paths.plot_phyid_dir
+    phyid.node_heatmap(atom='sts', plot_dir=plot_dir)
+    phyid.plot_mean_along('sts', varying_dim='source_layer', plot_dir=plot_dir)
 
 
 # ----------------------------------------------------------------------

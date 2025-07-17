@@ -10,11 +10,11 @@ Implements an ActivationRecorder class that:
 """
 import pickle, os
 import torch
-from typing import List, Optional
+from typing import List, Optional, Dict
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from IPython.core.debugger import Pdb
 
-from src.utils import ModelInformation
+from src.utils import ModelInformation, apply_prompt_template
 from src.activation_recorder.MultiPromptActivations import MultiPromptActivations
 
 # Sub-structures we'll fill from hooks
@@ -83,25 +83,20 @@ class ActivationRecorder:
             h.remove()
         self._hooks = []
     
-    @staticmethod
-    def _apply_prompt_template(prompt, tokenizer, prompt_template: str) -> str:
-        if prompt_template == 'chat':
-            messages = [{"role": "user", "content": prompt}]
-            return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        elif prompt_template == 'base':
-            return f"Question: {prompt}\n Answer: "
-        elif prompt_template == 'no':
-            return prompt
-        else:
-            raise ValueError("Invalid prompt template type. Choose 'chat', 'base', or 'none'.")
 
-    def record_prompts(self, prompts: List[str], max_new_tokens: int = 20, prompt_template: str = 'no') -> MultiPromptActivations:
+    def record_prompts(self, prompts: List[str] | Dict[str, List[str]] = None, max_new_tokens: int = 20, prompt_template: str = 'no') -> MultiPromptActivations:
         """
         Runs autoregressive generation for each prompt and collects intermediate activations
         via forward hooks. Each new sub-activation is attached bottom-up to the final structure.
         """
         # Record the prompts and max_new_tokens
-        self.prompts = [self._apply_prompt_template(prompt, self.tokenizer, prompt_template) for prompt in prompts]
+        # if dict flatten
+        if isinstance(prompts, dict):
+            self.prompts = [p for sublist in prompts.values() for p in sublist]
+        elif isinstance(prompts, list):
+            self.prompts = prompts
+        self.prompts = [apply_prompt_template(p, self.tokenizer, prompt_template) for p in self.prompts]
+
         self.max_new_tokens = max_new_tokens
 
         # Attach hooks before generation
@@ -215,7 +210,6 @@ class ActivationRecorder:
         index[dim] = slice(-1, None)            # keep axis, size 1
         return tensor[tuple(index)]
 
-
     
     def _remove_prompt_activations(self, activations, dim=-2):
         """
@@ -228,7 +222,6 @@ class ActivationRecorder:
         for key, value in activations.items():
             activations[key] = self._slice_tensor_along_dim(value, dim=dim)
         return activations
-
 
     
     def _create_head_activations(self, activations, layer_idx, head_idx):

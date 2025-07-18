@@ -1,6 +1,6 @@
 defaults:
   - paths
-  - model: Q3-1 # D2-16-A2
+  - model: L32-1 # L32-1
   - generation: base # original_prompts
   - time_series: attention_outputs # attention_outputs, expert_output
   - phyid: base # discrete

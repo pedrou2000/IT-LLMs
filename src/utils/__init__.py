@@ -5,7 +5,7 @@ from .utils import (
     invert_node_ranking,
 )
 from .generation import (
-    apply_prompt_template, template_tokenize_prompts, get_tokens_and_probs
+    apply_prompt_template, template_tokenize_prompts, get_tokens_and_probs, get_teacher_forcing_tokens_and_probs
 )
 
 
@@ -19,5 +19,6 @@ __all__ = [
     "perturb_model",
     "apply_prompt_template",
     "template_tokenize_prompts", 
-    "get_tokens_and_probs"
+    "get_tokens_and_probs",
+    "get_teacher_forcing_tokens_and_probs"
 ]

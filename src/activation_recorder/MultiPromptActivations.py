@@ -91,10 +91,11 @@ class MultiPromptActivations:
             print(f"Error while loading MultiPromptActivations from '{file_path}': {e}")
             raise
 
-    def verify_recorded_activations(self, prompts: List[str] = None, max_new_tokens: int = None, tokenizer: AutoTokenizer = None, diff_q_size: bool = False):
+    def verify_recorded_activations(self, prompts: dict, max_new_tokens: int = None, tokenizer: AutoTokenizer = None, diff_q_size: bool = False):
         """ Verify the recorded activations are correct in shape and value. """
         activations = self
-        
+        prompts = [prompt for prompt_list in prompts.values() for prompt in prompt_list]
+
         # Check shape of activations
         assert len(activations) == len(prompts), f'Expected {len(prompts)} prompts, got {len(activations)}'
         assert len(activations.prompts[0].steps) == max_new_tokens, f'Expected {max_new_tokens} steps, got {len(activations.prompts[0].steps)}'

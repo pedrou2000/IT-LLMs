@@ -91,10 +91,7 @@ class ActivationRecorder:
         """
         # Record the prompts and max_new_tokens
         # if dict flatten
-        if isinstance(prompts, dict):
-            self.prompts = [p for sublist in prompts.values() for p in sublist]
-        elif isinstance(prompts, list):
-            self.prompts = prompts
+        self.prompts = [p for sublist in prompts.values() for p in sublist]
         self.prompts = [apply_prompt_template(p, self.tokenizer, prompt_template) for p in self.prompts]
 
         self.max_new_tokens = max_new_tokens

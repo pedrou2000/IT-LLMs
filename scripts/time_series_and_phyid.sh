@@ -13,5 +13,5 @@ export HF_ALLOW_CODE_EVAL=1
 
 echo "Working directory: $(pwd)"
 
-# python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/time_series_and_phyid.py
-python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/compute_average_prompt.py
+python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/time_series_and_phyid.py
+# python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/compute_average_prompt.py

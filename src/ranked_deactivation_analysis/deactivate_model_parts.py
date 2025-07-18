@@ -1,43 +1,124 @@
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from typing import List, Tuple, Dict, Union
+import torch
+import torch.nn as nn
+from contextlib import contextmanager
 
-
-def make_attention_ablation_hook(heads_to_ablate: list[int], head_dim: int):
-    def ablation_hook(module, input, output):
-        output = output.clone()
+def make_attention_deactivation_hook(heads_to_ablate: list[int], head_dim: int):
+    def deactivation_hook(module, input, output):
+        layer_output = output[0] if isinstance(output, tuple) else output
+        print(f"Layer output shape: {layer_output.shape}, deactivating heads: {heads_to_ablate}")
         for head in heads_to_ablate:
             start = head * head_dim
             end = (head + 1) * head_dim
             output[..., start:end] = 0.0
         return output
-    return ablation_hook
+    return deactivation_hook
 
 
+def get_model_part_modules(model: PreTrainedModel, module_name: str = "self_attn") -> dict[int, nn.Module]:
+    """
+    Recursively collects all submodules whose name contains the specified `module_name`.
+    
+    :param model: A Hugging Face PreTrainedModel.
+    :param module_name: Substring to search for in submodule names.
+    :return:  A dictionary mapping layer indices to the corresponding modules.
+    """
+    modules: dict[int, nn.Module] = {}
+
+    for name, module in model.named_modules():
+        if module_name in name and hasattr(module, 'layer_idx'):
+            layer_idx = getattr(module, 'layer_idx', None)
+            modules[layer_idx] = module
+
+    return modules
+
+def group_nodes_by_layer(nodes_to_deactivate: List[Tuple[int, int]]) -> Dict[int, List[int]]:
+    grouped: Dict[int, List[int]] = {}
+    for layer, node in nodes_to_deactivate:
+        if layer not in grouped:
+            grouped[layer] = []
+        grouped[layer].append(node)
+    return grouped
+
+class ModuleDeactivator:
+    @staticmethod
+    def deactivate_self_attn(module: nn.Module, nodes: List[int]):
+        """
+        Deactivate self-attention heads in the module by setting their weights to zero.
+        
+        :param module: The self-attention module to modify.
+        :param nodes: List of node indices (heads) to deactivate.
+        """
+        if not hasattr(module, 'deactivated_heads'):
+            raise ValueError("Module does not support deactivation. Ensure it has 'deactivated_heads' attribute.")
+
+        module.deactivated_heads = nodes
+
+
+
+
+
+    @staticmethod
+    def deactivate_mlp(module: nn.Module, nodes: List[int]):
+        raise NotImplementedError()
+    
+    @staticmethod
+    def deactivate_selected_nodes(module: nn.Module, nodes: List[int], module_type: str):
+        """
+        Deactivate specific nodes in the module.
+
+        :param module: The module to modify.
+        :param nodes: List of node indices to deactivate.
+        :param module_type: Type of the module (e.g., "self_attn", "mlp").
+        """
+        fn = getattr(ModuleDeactivator, f"deactivate_{module_type}", None)
+        if fn is None:
+            raise ValueError(f"Unsupported module type: {module_type}")
+        return fn(module, nodes)
+
+
+
+@contextmanager
 def deactivate_model_parts(
     model: PreTrainedModel,
     nodes_to_deactivate: List[Tuple[int, int]],
     module_name: str = "self_attn", # "self_attn", "mlp", ...
 ):
     """
-    Deactivate specific nodes in the model by setting their weights to zero.
+    Temporarilly deactivate specific nodes in the model by setting their weights to zero.
     
     :param model: The pre-trained model to modify.
     :param nodes_to_deactivate: List of tuples (layer_index, node_index) indicating which nodes to deactivate.
     :param module_name: The name of the module where the nodes are located (e.g., "self_attn", "mlp").
     """
 
-    for layer_index, node_index in nodes_to_deactivate:
-        # Construct the parameter name based on the module and indices
-        param_name = f"{module_name}.layers.{layer_index}.nodes.{node_index}.weight"
+    modules_to_deactivate = get_model_part_modules(model, module_name)
+    nodes_by_layer = group_nodes_by_layer(nodes_to_deactivate)
+
+    for layer_idx, nodes in nodes_by_layer.items():
+        if layer_idx not in modules_to_deactivate:
+            print(f"Warning: No module found for layer {layer_idx}. Skipping deactivation.")
+            continue
         
-        # Create a hook to zero out the weights of the specified nodes
-        hook = make_attention_ablation_hook([node_index], model.config.hidden_size // model.config.num_attention_heads)
-        # Register the hook to the specified module
-        module = getattr(model, module_name)
-        if hasattr(module, 'register_forward_hook'):
-            module.register_forward_hook(hook)
-        else:
-            raise ValueError(f"Module {module_name} does not support forward hooks.")
-        
-    print(f"Deactivated nodes: {nodes_to_deactivate} in module: {module_name}")
-    return model
+        module = modules_to_deactivate[layer_idx]
+        if not hasattr(module, 'head_dim'):
+            print(f"Warning: Module {module} does not have 'head_dim' attribute. Cannot proceed with deactivation.")
+            continue
+
+        ModuleDeactivator.deactivate_selected_nodes(
+            module=module,
+            nodes=nodes,
+            module_type=module_name
+        )
+
+    try:
+        yield model
+    finally:
+        for layer_idx, nodes in nodes_by_layer.items():
+            if layer_idx not in modules_to_deactivate:
+                continue
+            
+            module = modules_to_deactivate[layer_idx]
+            if hasattr(module, 'deactivated_heads'):
+                module.deactivated_heads = []

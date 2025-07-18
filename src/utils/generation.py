@@ -64,6 +64,7 @@ def _process_chunk(
             do_sample=False,
             return_dict_in_generate=True,
             output_scores=True,
+            temperature=0.0,
         )
 
     seqs   = out.sequences                                   # (B , P+T)
@@ -139,7 +140,6 @@ def get_teacher_forcing_tokens_and_probs(
     non_deactivated_token_and_logits: Dict[str, List[GenResult]],
     *,
     micro_batch_size: int = 32,
-    sample_alternative_tokens: bool = True,
 ) -> Dict[str, List[GenResult]]:
     """
     Run teacher forcing with the deactivated model using tokens from non_deactivated_token_and_logits.
@@ -170,7 +170,7 @@ def get_teacher_forcing_tokens_and_probs(
         
         # Process this chunk
         chunk_results = _process_teacher_forcing_chunk(
-            model, tokenizer, chunk, pad_id, device, sample_alternative_tokens
+            model, tokenizer, chunk, pad_id, device
         )
         flat_results.extend(chunk_results)
         torch.cuda.empty_cache()
@@ -208,7 +208,8 @@ def _process_teacher_forcing_chunk(
         outputs = model(
             input_ids=padded_tokens,
             attention_mask=attention_mask,
-            return_dict=True
+            return_dict=True,
+            temperature=0.0,  # Use temperature=0 for deterministic output
         )
         
         # Get probabilities from logits

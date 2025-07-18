@@ -1,0 +1,2 @@
+deactivate_k_nodes_per_iteration: 5
+max_deactivated_nodes: 20

@@ -1,3 +1,5 @@
+import pickle
+import os
 import random
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from typing import List, Tuple, Union, Dict
@@ -5,17 +7,31 @@ import xarray as xr
 import torch
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
+from functools import cached_property
 
 from src.utils import template_tokenize_prompts, get_tokens_and_probs, invert_node_ranking, get_teacher_forcing_tokens_and_probs
 from src.ranked_deactivation_analysis.deactivate_model_parts import deactivate_model_parts
 
 @dataclass
 class PerformanceDivergenceResult:
-    kl_per_prompt_per_timestep: Dict[str, List[torch.Tensor]]  # [prompt_key][prompt_idx] -> tensor of shape (T,)
-    performance_divergence_per_prompt: Dict[str, List[float]]  # [prompt_key][prompt_idx] -> float (average KL)
-    overall_performance_divergence: float  # Average across all prompts
+    kl_xr: xr.DataArray                     # dims: ("category", "prompt", "time")
     num_nodes_deactivated: int
-    deactivated_nodes: List[Tuple[int, int]]  # List of (layer, node) tuples
+    deactivated_nodes: List[Tuple[int, int]]
+
+    # ---------- derived metrics -----------------------------------------
+    @cached_property
+    def overall_performance_divergence(self) -> float:
+        return float(self.kl_xr.mean(skipna=True).item())
+
+    @cached_property
+    def divergence_per_prompt(self) -> xr.DataArray:
+        # dims -> ("category", "prompt")
+        return self.kl_xr.mean(dim="time", skipna=True)
+
+    @cached_property
+    def divergence_per_category(self) -> xr.DataArray:
+        # dims -> ("category",)
+        return self.kl_xr.mean(dim=("prompt", "time"), skipna=True)
 
 @dataclass
 class RankedDeactivationResults:
@@ -51,68 +67,71 @@ class RankedDeactivationAnalysis:
                 "return_tensors": "pt",
             },
         )
+
+        self.results = None  # Will be set after running the analysis
     
     def compute_kl_divergence(
         self,
         non_deactivated_results: Dict[str, List[tuple]],
         deactivated_results: Dict[str, List[tuple]],
         num_nodes_deactivated: int,
-        deactivated_nodes: List[Tuple[int, int]]
+        deactivated_nodes: List[Tuple[int, int]],
     ) -> PerformanceDivergenceResult:
         """
-        Compute KL divergence between non-deactivated and deactivated model results.
+        Compute a single 3D xarray.DataArray of KL divergences:
+            dims = (category, prompt, time)
+        NaN padding is used for variable-length continuations.
         """
-        kl_per_prompt_per_timestep = {}
-        performance_divergence_per_prompt = {}
-        all_divergences = []
-        
-        for prompt_key in non_deactivated_results:
-            kl_per_prompt_per_timestep[prompt_key] = []
-            performance_divergence_per_prompt[prompt_key] = []
-            
-            for i, (non_deact_result, deact_result) in enumerate(zip(
-                non_deactivated_results[prompt_key], 
-                deactivated_results[prompt_key]
-            )):
-                # Extract probability tensors
-                non_deact_probs = non_deact_result[1]  # (T, |V|)
-                deact_probs = deact_result[1]         # (T, |V|)
-                print(f"Processing prompt {prompt_key}, iteration {i}:")
-                print(f"Non-deactivated probs shape: {non_deact_probs.shape}, Deactivated probs shape: {deact_probs.shape}")
-                # print the sum of differences in values for debugging
-                # print(f"Sum of differences: {torch.sum(torch.abs(non_deact_probs - deact_probs)):.6f}")
-                
-                # Ensure tensors are on the same device and have same shape
-                assert non_deact_probs.shape == deact_probs.shape, f"Shape mismatch: {non_deact_probs.shape} vs {deact_probs.shape}"
-                
-                # Compute KL divergence at each timestep: KL(p_non_deact || p_deact)
-                # KL(P||Q) = sum(P * log(P/Q))
-                eps = 1e-30
-                p = non_deact_probs.float().clamp_min(eps)
-                q = deact_probs.float().clamp_min(eps)
-                kl_per_timestep = torch.sum(p * torch.log(p / q), dim=-1)
-                print(f"Prompt {prompt_key}, Iteration {i}: KL divergence per timestep: {kl_per_timestep}")
-                
-                # Store per-timestep KL
-                kl_per_prompt_per_timestep[prompt_key].append(kl_per_timestep)
-                
-                # Compute performance divergence for this prompt (average over timesteps)
-                perf_div = torch.mean(kl_per_timestep).item()
-                performance_divergence_per_prompt[prompt_key].append(perf_div)
-                all_divergences.append(perf_div)
-        
-        # Overall performance divergence
-        overall_perf_div = sum(all_divergences) / len(all_divergences) if all_divergences else 0.0
-        
-        return PerformanceDivergenceResult(
-            kl_per_prompt_per_timestep=kl_per_prompt_per_timestep,
-            performance_divergence_per_prompt=performance_divergence_per_prompt,
-            overall_performance_divergence=overall_perf_div,
-            num_nodes_deactivated=num_nodes_deactivated,
-            deactivated_nodes=deactivated_nodes
+        eps = 1e-30
+        categories = list(non_deactivated_results.keys())
+        n_cat = len(categories)
+
+        # ── Determine max prompt count and max generation length ─────────────
+        max_prompts = max(len(v) for v in non_deactivated_results.values())
+        max_T = max(
+            probs.shape[0]
+            for prompts in non_deactivated_results.values()
+            for (_, probs, _) in prompts
         )
-    
-    def run(self, deactivate_k_nodes_per_iteration: int, max_deactivated_nodes: Union[int, None] = None, micro_batch_size: int = 32) -> RankedDeactivationResults:
+
+        # ── Allocate output array (with padding) ─────────────────────────────
+        kl_tensor = torch.full((n_cat, max_prompts, max_T), float("nan"))
+
+        # ── Fill it directly ─────────────────────────────────────────────────
+        for c_idx, cat in enumerate(categories):
+            na_list = non_deactivated_results[cat]
+            a_list  = deactivated_results[cat]
+            for p_idx, ((_, p_na, _), (_, p_a, _)) in enumerate(zip(na_list, a_list)):
+                assert p_na.shape == p_a.shape, f"Shape mismatch for category '{cat}', prompt {p_idx}: {p_na.shape} vs {p_a.shape}"
+                p = p_na.float().clamp_min(eps)
+                q = p_a.float().clamp_min(eps)
+                kl_t = torch.sum(p * torch.log(p / q), dim=-1)  # (T,)
+                kl_tensor[c_idx, p_idx, :kl_t.shape[0]] = kl_t.cpu()
+
+        # ── Wrap in xarray for labeled indexing ──────────────────────────────
+        kl_xr = xr.DataArray(
+            kl_tensor,
+            dims=["category", "prompt", "time"],
+            coords={
+                "category": categories,
+                "prompt": list(range(max_prompts)),
+                "time": list(range(max_T)),
+            },
+        )
+
+        return PerformanceDivergenceResult(
+            kl_xr=kl_xr,
+            num_nodes_deactivated=num_nodes_deactivated,
+            deactivated_nodes=deactivated_nodes,
+        )
+  
+    def run(
+            self, 
+            deactivate_k_nodes_per_iteration: int, 
+            max_deactivated_nodes: Union[int, None] = None, 
+            micro_batch_size: int = 32, 
+            save_file_path: str = None
+    ) -> RankedDeactivationResults:
         """
         Run the ranked deactivation analysis on the model with the given prompts.
         
@@ -128,11 +147,6 @@ class RankedDeactivationAnalysis:
             max_new_tokens=self.max_new_tokens, 
             micro_batch_size=micro_batch_size
         )
-        div_self = self.compute_kl_divergence(non_deactivated_token_and_logits,
-                                          non_deactivated_token_and_logits,
-                                          num_nodes_deactivated=0,
-                                          deactivated_nodes=[])
-        print(f"Self-KL divergence (baseline): {div_self.overall_performance_divergence:.6f}")
 
         deactivation_results = []
         deactivation_schedule = []
@@ -165,7 +179,6 @@ class RankedDeactivationAnalysis:
                     tokenizer=self.tokenizer,
                     non_deactivated_token_and_logits=non_deactivated_token_and_logits,
                     micro_batch_size=micro_batch_size,
-                    sample_alternative_tokens=False  # Set to True if you want to see what tokens would be generated
                 )
                 
                 # Compute KL divergence
@@ -185,12 +198,34 @@ class RankedDeactivationAnalysis:
                 # Clear GPU memory
                 del deactivated_token_and_logits
                 torch.cuda.empty_cache()
+        
 
-        return RankedDeactivationResults(
+        results = RankedDeactivationResults(
             non_deactivated_results=non_deactivated_token_and_logits,
             deactivation_results=deactivation_results,
             deactivation_schedule=deactivation_schedule
         )
+
+        self.results = results
+        if save_file_path:
+            self.save_results(save_file_path)
+
+        return results
+    
+    def save_results(self, file_path: str):
+        """
+        Save the results to a file.
+        """
+        if self.results is None:
+            raise ValueError("No results to save. Run the analysis first.")
+        
+        dir_path = file_path.rsplit('/', 1)[0]
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(self.results, f)
+        print(f"Results saved to {file_path}")
     
     def plot_performance_divergence(self, results: RankedDeactivationResults):
         """

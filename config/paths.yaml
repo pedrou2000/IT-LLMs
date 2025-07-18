@@ -5,6 +5,7 @@ paths:
   model_path: ${model.company}/${model.model_family}/${model.model_size}/${model.it}/
   activation_method: ${time_series.node_type}/${time_series.node_activation}/${time_series.projection_method}/
   phyid_method: ${paths.activation_method}phyid_tau-${phyid.tau}/phyid_kind-${phyid.kind}/phyid_redundancy-${phyid.redundancy}/
+  deactivation_method: deactivate_k_nodes_per_iteration-${deactivation_analysis.deactivate_k_nodes_per_iteration}/max_deactivated_nodes-${deactivation_analysis.max_deactivated_nodes}/
 
   # data directories
   data_dir: ${paths.project_root}data/${paths.model_path}${generation.name}/
@@ -16,8 +17,12 @@ paths:
   data_phyid_file: ${paths.data_phyid_dir}multi_prompt_phyid.pkl
   data_phyid_file_data_array: ${paths.data_phyid_dir}multi_prompt_phyid.nc
 
+  data_deactivation_dir: ${paths.data_dir}deactivation/
+  data_deactivation_file: ${paths.data_deactivation_dir}ranked/${paths.phyid_method}${paths.deactivation_method}multi_prompt_deactivation.pkl
+  data_random_deactivation_runs: ${paths.data_deactivation_dir}random/${paths.deactivation_method}
 
   # plot directories
   plot_dir: ${paths.project_root}plots/${paths.model_path}${generation.name}/
   plot_time_series_dir: ${paths.plot_dir}time_series/${paths.activation_method}
   plot_phyid_dir: ${paths.plot_dir}phyid/${paths.phyid_method}
+  plot_deactivation_dir: ${paths.plot_dir}deactivation/${paths.phyid_method}${paths.deactivation_method}

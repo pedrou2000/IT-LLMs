@@ -1,5 +1,4 @@
-defaults:
-  - base
+max_new_tokens: 128
 
 name: original_prompts
 prompts:

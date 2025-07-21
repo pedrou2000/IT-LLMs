@@ -160,10 +160,6 @@ class ActivationRecorder:
 
         activations = module_output[1] # The second element contains the activations
 
-        for key, value in activations.items():
-            print(f"Attention activations for {key} in layer {layer_idx}: {value.shape if hasattr(value, 'shape') else value}")
-
-        
         assert layer_idx == activations['layer_idx'], f'Layer index mismatch: {layer_idx} != {activations["layer_idx"]}'
 
         # Walk up the chain
@@ -378,53 +374,3 @@ class ActivationRecorder:
                 return int(tokens[i + 1])
         return 0
     
-
-if __name__ == "__main__":
-    """
-    Simple usage of ActivationRecorder on a small model.
-    """
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    
-
-    model_name = "google/gemma-2-2b-it"
-    max_new_tokens=10
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, 
-        # device_map='auto', 
-        attn_implementation='eager',  
-    )
-    model.eval()
-
-    recorder = ActivationRecorder(model, tokenizer)
-    prompts = ["Hello, world! How can you code",  "Tell me a joke"]
-    activations = recorder.record_prompts(prompts, max_new_tokens=max_new_tokens)
-    recorder.verify_recorded_activations(activations)
-    
-    # Save the activations to disk.
-    save_dir = "./data/activations"
-    activations.save(save_dir)
-    
-    # Load the activations from disk.
-    file_path = os.path.join(save_dir, "multi_prompt_activations.pkl")
-    loaded_activations = MultiPromptActivations.load(file_path)
-    
-    # Optional: verify the loaded activations match the saved ones.
-    print("Loaded MultiPromptActivations object has:", len(loaded_activations.prompts), "prompts recorded.")
-    
-    # Check again the activations
-    recorder.verify_recorded_activations(loaded_activations)
-    
-
-    print("Final MultiPromptActivations object has:", len(activations.prompts), "prompts recorded.")
-    
-    # Extract the first prompt, first step, first layer, first head
-    prompt_acts = activations.prompts[0]
-    step_acts = prompt_acts.steps[0]
-    layer_acts = step_acts.layers[0]
-    attn = layer_acts.attention
-    for head_acts in attn.heads:
-        print(head_acts.query.shape)
-        print(head_acts.attention_weights.shape)
-        print(head_acts.attention_outputs.shape)
-        print(head_acts.projected_outputs.shape)

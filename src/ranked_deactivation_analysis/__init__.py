@@ -1,5 +1,6 @@
-from .RankedDeactivationAnalysis import RankedDeactivationAnalysis
+from .RankedDeactivationAnalysis import RankedDeactivationAnalysis, RankedDeactivationResults
 
 __all__ = [
-    'RankedDeactivationAnalysis'
+    'RankedDeactivationAnalysis',
+    'RankedDeactivationResults'
 ]

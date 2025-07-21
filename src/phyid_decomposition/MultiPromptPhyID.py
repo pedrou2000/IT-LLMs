@@ -47,8 +47,12 @@ class MultiPromptPhyID:
             # Create a PromptPhyID for each prompt
             print(f"Processing prompt {prompt_index+1}/{len(multi_prompt_time_series.prompts)} with {len(prompt_ts.generated_tokens)} generated tokens.")
             generated_tokens = prompt_ts.generated_tokens
-            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
+            try:
+                prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
                                                           phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path)
+            except Exception as e:
+                print(f"Error processing prompt {prompt_index}: {e}")
+                continue
             obj.prompts[prompt_index] = prompt_phi_id
 
         return obj
@@ -151,7 +155,7 @@ class MultiPromptPhyID:
         collapsing node-pair or time dimensions.
         """
         da = self.data_array if self.data_array is not None else self.build_data_array()
-        avg_da = da.mean(dim="prompt") # [atom, source_layer, …, time]
+        avg_da = da.mean(dim=["prompt", "time"]) # [atom, source_layer, …, time]
 
         # ------------------------------------------------------------------
         # 2 · Convert the 6-D DataArray back into a PromptPhyID wrapper
@@ -214,7 +218,8 @@ class MultiPromptPhyID:
         for prompt in self.prompts.values():
             print(f"Processing prompt {n+1}/{len(self.prompts)}...", flush=True)
             da = prompt.build_data_array().astype(dtype)   # one prompt in RAM
-            print("Built prompt array")
+            da = da.mean(dim=["time"])
+            print(f"Shape of data array for prompt {n+1}: {da.shape}", flush=True)
             # running_sum = da.copy(deep=True) if running_sum is None else running_sum + da
             running_sum = da if running_sum is None else running_sum + da
             n += 1
@@ -236,9 +241,7 @@ class MultiPromptPhyID:
             generated_tokens=[],
         )
 
-        for (sl, sn, tl, tn), sub in avg_da.groupby(
-            ["source_layer", "source_node", "target_layer", "target_node"]
-        ):
+        for (sl, sn, tl, tn), sub in avg_da.groupby(["source_layer", "source_node", "target_layer", "target_node"]):
             phy_ts = PhyIDTimeSeries(
                 model_info=self.model_info,
                 source_layer_index=int(sl),
@@ -250,6 +253,8 @@ class MultiPromptPhyID:
                 # Keep xarray slice — no NumPy copy
                 setattr(phy_ts, atom, sub.sel(atom=atom))
             out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
+        
+        print(f"Length of average PromptPhyID: {len(out.phyid[(0, 0, 0, 1)].sts)}", flush=True)
 
         self.average_prompt_phyid = out
         if save_dir_path:

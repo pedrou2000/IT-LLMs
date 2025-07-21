@@ -35,9 +35,68 @@ class PerformanceDivergenceResult:
 
 @dataclass
 class RankedDeactivationResults:
-    non_deactivated_results: Dict[str, List[tuple]]  # GenResult = (tokens, probs, decoded_text)
     deactivation_results: List[PerformanceDivergenceResult]  # One per iteration
     deactivation_schedule: List[int]  # Number of nodes deactivated at each iteration
+    
+    def save(self, file_path: str):
+        """ Save the results to a file. """
+
+        dir_path = file_path.rsplit('/', 1)[0]
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(self, f)
+        print(f"Results saved to {file_path}")
+
+    @classmethod
+    def load(cls, file_path: str) -> 'RankedDeactivationResults':
+        """ Load the results from a file. """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File {file_path} does not exist.")
+
+        with open(file_path, 'rb') as f:
+            results = pickle.load(f)
+
+        if not isinstance(results, RankedDeactivationResults):
+            raise ValueError("Loaded data is not of type RankedDeactivationResults.")
+
+        return cls(**results.__dict__)
+    
+    def plot_overall_performance_divergence(self):
+        """
+        Plot the performance divergence as a function of number of deactivated nodes.
+        """
+        x = self.deactivation_schedule
+        y = [result.overall_performance_divergence for result in self.deactivation_results]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(x, y, 'b-o', linewidth=2, markersize=6)
+        plt.xlabel('Number of Deactivated Nodes')
+        plt.ylabel('Overall Performance Divergence (KL)')
+        plt.title('Performance Divergence vs Number of Deactivated Nodes')
+        plt.grid(True, alpha=0.3)
+        plt.show()
+    
+    def plot_performance_divergence_per_category(self):
+        """
+        Plot the performance divergence per category as a function of number of deactivated nodes.
+        """
+        x = self.deactivation_schedule
+        categories = self.deactivation_results[0].kl_xr.coords['category'].values
+
+        plt.figure(figsize=(12, 8))
+        for i, category in enumerate(categories):
+            y = [result.divergence_per_category.sel(category=category).item() for result in self.deactivation_results]
+            plt.plot(x, y, label=category, marker='o')
+
+        plt.xlabel('Number of Deactivated Nodes')
+        plt.ylabel('Performance Divergence (KL)')
+        plt.title('Performance Divergence per Category vs Number of Deactivated Nodes')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.show()
+
 
 class RankedDeactivationAnalysis:
     def __init__(
@@ -55,7 +114,8 @@ class RankedDeactivationAnalysis:
         self.max_new_tokens = max_new_tokens
 
         if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token  
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = 'left'
 
         self.tokenized_prompts = template_tokenize_prompts(
             prompts,
@@ -68,7 +128,13 @@ class RankedDeactivationAnalysis:
             },
         )
 
-        self.results = None  # Will be set after running the analysis
+    def randomize_node_ranking(self):
+        """
+        Randomly shuffle the node ranking list to ensure randomness in deactivation order.
+        """
+        random.shuffle(self.node_ranking)
+        print("Node ranking randomized.")
+
     
     def compute_kl_divergence(
         self,
@@ -82,7 +148,7 @@ class RankedDeactivationAnalysis:
             dims = (category, prompt, time)
         NaN padding is used for variable-length continuations.
         """
-        eps = 1e-30
+        eps = 1e-10
         categories = list(non_deactivated_results.keys())
         n_cat = len(categories)
 
@@ -105,6 +171,7 @@ class RankedDeactivationAnalysis:
                 assert p_na.shape == p_a.shape, f"Shape mismatch for category '{cat}', prompt {p_idx}: {p_na.shape} vs {p_a.shape}"
                 p = p_na.float().clamp_min(eps)
                 q = p_a.float().clamp_min(eps)
+                print(f" ")
                 kl_t = torch.sum(p * torch.log(p / q), dim=-1)  # (T,)
                 kl_tensor[c_idx, p_idx, :kl_t.shape[0]] = kl_t.cpu()
 
@@ -147,6 +214,14 @@ class RankedDeactivationAnalysis:
             max_new_tokens=self.max_new_tokens, 
             micro_batch_size=micro_batch_size
         )
+
+        self_kl = self.compute_kl_divergence(
+            non_deactivated_results=non_deactivated_token_and_logits,
+            deactivated_results=non_deactivated_token_and_logits,  # No deactivation yet
+            num_nodes_deactivated=0,
+            deactivated_nodes=[]  # No nodes deactivated yet
+        )
+        print(f"Self KL divergence: {self_kl.overall_performance_divergence:.6f}")
 
         deactivation_results = []
         deactivation_schedule = []
@@ -201,43 +276,12 @@ class RankedDeactivationAnalysis:
         
 
         results = RankedDeactivationResults(
-            non_deactivated_results=non_deactivated_token_and_logits,
             deactivation_results=deactivation_results,
             deactivation_schedule=deactivation_schedule
         )
 
-        self.results = results
         if save_file_path:
-            self.save_results(save_file_path)
+            results.save(save_file_path)
 
         return results
     
-    def save_results(self, file_path: str):
-        """
-        Save the results to a file.
-        """
-        if self.results is None:
-            raise ValueError("No results to save. Run the analysis first.")
-        
-        dir_path = file_path.rsplit('/', 1)[0]
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
-
-        with open(file_path, 'wb') as f:
-            pickle.dump(self.results, f)
-        print(f"Results saved to {file_path}")
-    
-    def plot_performance_divergence(self, results: RankedDeactivationResults):
-        """
-        Plot the performance divergence as a function of number of deactivated nodes.
-        """
-        x = results.deactivation_schedule
-        y = [result.overall_performance_divergence for result in results.deactivation_results]
-        
-        plt.figure(figsize=(10, 6))
-        plt.plot(x, y, 'b-o', linewidth=2, markersize=6)
-        plt.xlabel('Number of Deactivated Nodes')
-        plt.ylabel('Overall Performance Divergence (KL)')
-        plt.title('Performance Divergence vs Number of Deactivated Nodes')
-        plt.grid(True, alpha=0.3)
-        plt.show()

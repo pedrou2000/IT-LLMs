@@ -235,5 +235,12 @@ def _process_teacher_forcing_chunk(
         sampled_decoded = tokenizer.decode(sampled_tokens, skip_special_tokens=True)
             
         results.append((sampled_tokens, item_probs, sampled_decoded))
+
+        print(f"Original tokens shape: {original_tokens.shape}")
+        print(f"Original probs shape:  {original_probs.shape}")
+        print(f"Inferred prompt_len:   {prompt_len}")
+        print(f"Start index: {start}, End index: {end}, Logits shape: {logits[i].shape}")
+        print(f"Generated text: {sampled_decoded}")
+
     
     return results

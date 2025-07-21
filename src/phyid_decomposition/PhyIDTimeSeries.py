@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Sequence, Union, Tuple
 import numpy as np
+import xarray as xr
 
 from phyid.calculate import calc_PhiID 
 
@@ -139,4 +140,4 @@ class PhyIDTimeSeries:
 
     def get_atoms_names(self) -> List[str]:
         """Return the names of the atoms in this PhyIDTimeSeries."""
-        return sorted(k for k, v in vars(self).items() if isinstance(v, (list, np.ndarray)))
+        return sorted(k for k, v in vars(self).items() if isinstance(v, (list, np.ndarray, float, xr.DataArray)))

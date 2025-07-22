@@ -45,7 +45,7 @@ def main():
     print("Building data array for phyid")
     phyid.build_data_array()
     print("Computing average prompt phyid")
-    phyid = phyid.compute_average_prompt_phyid(save_dir_path=cfg.paths.data_phyid_dir)
+    phyid = phyid.compute_average_prompt_phyid_stream(save_dir_path=cfg.paths.data_phyid_dir)
 
     print("Plotting phyid results...", flush=True)
     plot_dir = cfg.paths.plot_phyid_dir

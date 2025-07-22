@@ -64,7 +64,7 @@ class ActivationRecorder:
         """
         for name, module in self.model.named_modules():
             # Only attach to self-attn and MLP at the layer level
-            if name.endswith("self_attn"):  # High-level attention module
+            if name.endswith("self_attn") or name.endswith("attention"):  # High-level attention module
                 h = module.register_forward_hook(self._attention_hook_fn)
                 self._hooks.append(h)
             # elif name.endswith("mlp"):  # High-level MLP module

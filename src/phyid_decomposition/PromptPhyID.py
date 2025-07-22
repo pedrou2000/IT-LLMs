@@ -269,7 +269,6 @@ class PromptPhyID:
         plt.xlabel("Source Node")
         plt.ylabel("Source Layer")
         plt.tight_layout()
-        plt.show()
         
         if plot_dir:
             plot_dir = os.path.join(plot_dir, "syn_minus_red_rank")
@@ -281,6 +280,7 @@ class PromptPhyID:
             print(f"Plot saved to {save_file}")
         else:
             plt.show()
+        plt.close()
 
     def plot_syn_minus_red_rank_per_layer(self, rank_da, *, plot_dir: Union[str, None] = None) -> None:  
         """Line‑and‑dot plot of 0–1‑normalized (sts−rtr) per layer (higher = more synergistic)."""
@@ -309,6 +309,7 @@ class PromptPhyID:
             print(f"Plot saved to {save_file}")
         else:
             plt.show()
+        plt.close()
 
 
 

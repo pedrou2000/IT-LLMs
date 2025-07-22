@@ -254,11 +254,16 @@ class MultiPromptPhyID:
                 setattr(phy_ts, atom, sub.sel(atom=atom))
             out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
         
-        print(f"Length of average PromptPhyID: {len(out.phyid[(0, 0, 0, 1)].sts)}", flush=True)
+        # Clean the data array 
+        del avg_da
+        gc.collect()
 
         self.average_prompt_phyid = out
         if save_dir_path:
             self.save_averarge_prompt_phyid(dir_path=save_dir_path)
+
+        print(f"Length of average PromptPhyID: {len(out.phyid[(1, 1, 1, 1)].sts)}", flush=True)
+
         return out
 
 

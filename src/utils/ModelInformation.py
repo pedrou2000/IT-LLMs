@@ -34,7 +34,14 @@ class ModelInformation:
         self.num_attention_heads_per_layer = getattr(config, "num_attention_heads", getattr(config, "n_head", 0))
         self.total_num_attention_heads = self.num_layers * self.num_attention_heads_per_layer
         self.hidden_size = getattr(config, "hidden_size", getattr(config, "n_embd", 0))
-        self.head_dim = getattr(config, "head_dim", getattr(config, "v_head_dim", None))
+        if getattr(config, "head_dim", None) is not None:
+            self.head_dim = config.head_dim
+        elif getattr(config, "v_head_dim", None) is not None:
+            self.head_dim = config.v_head_dim
+        elif self.hidden_size > 0 and self.num_attention_heads_per_layer > 0:
+            self.head_dim = self.hidden_size // self.num_attention_heads_per_layer
+        else:
+            raise ValueError("Cannot determine head_dim from model config")
         self.n_routed_experts = getattr(config, "n_routed_experts", None)
         self.n_shared_experts = getattr(config, "n_shared_experts", None)
         self.num_experts_per_tok = getattr(config, "num_experts_per_tok", None)

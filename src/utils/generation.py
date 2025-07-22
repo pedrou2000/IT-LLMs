@@ -48,11 +48,20 @@ def _process_chunk(
     Collate `enc_list`, run greedy generation, and return one GenResult
     per item: (generated_ids, probs, decoded_text)
     """
-    in_seqs  = [e["input_ids"].squeeze(0)    for e in enc_list]          # 1‑D each
-    attn_ms  = [e["attention_mask"].squeeze(0) for e in enc_list]
+    # in_seqs  = [e["input_ids"].squeeze(0)    for e in enc_list]          # 1‑D each
+    # attn_ms  = [e["attention_mask"].squeeze(0) for e in enc_list]
 
-    input_ids = pad_sequence(in_seqs,  batch_first=True, padding_value=pad_id)
-    attn_mask = pad_sequence(attn_ms,  batch_first=True, padding_value=0)
+    # input_ids = pad_sequence(in_seqs,  batch_first=True, padding_value=pad_id)
+    # attn_mask = pad_sequence(attn_ms,  batch_first=True, padding_value=0)
+
+    # Let the tokenizer pad consistently (left or right as configured)
+    batch = tokenizer.pad(
+        enc_list,                # list[BatchEncoding]
+        padding="longest",       # or True
+        return_tensors="pt"
+    )
+    input_ids  = batch["input_ids"].to(device)
+    attn_mask  = batch["attention_mask"].to(device)
 
     input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
 
@@ -193,28 +202,28 @@ def _process_teacher_forcing_chunk(
     """
     Process a chunk of teacher forcing items.
     """
-    # Extract just the token sequences from the chunk
-    token_sequences = [tokens for tokens, _, _ in chunk]
-    
-    # Pad sequences to same length
-    padded_tokens = pad_sequence(token_sequences, batch_first=True, padding_value=pad_id)
-    padded_tokens = padded_tokens.to(device)
-    
-    # Create attention mask (1 for real tokens, 0 for padding)
-    attention_mask = (padded_tokens != pad_id).long()
-    
+    enc_list: List[BatchEncoding] = [
+        {"input_ids": seq} for seq, _, _ in chunk
+    ]
+    batch = tokenizer.pad(
+        enc_list,
+        padding="longest",
+        return_tensors="pt",
+    )
+    input_ids     = batch["input_ids"].to(device)
+    attention_msk = batch["attention_mask"].to(device)
+
+    # ------------------------------------- #
+    # 2.  Forward pass — get softmax probs  #
+    # ------------------------------------- #
     with torch.no_grad():
-        # Forward pass to get logits
-        outputs = model(
-            input_ids=padded_tokens,
-            attention_mask=attention_mask,
+        logits = model(
+            input_ids=input_ids,
+            attention_mask=attention_msk,
             return_dict=True,
-            temperature=0.0,  # Use temperature=0 for deterministic output
-        )
-        
-        # Get probabilities from logits
-        logits = outputs.logits  # (batch_size, seq_len, vocab_size)
-        probs = torch.softmax(logits, dim=-1).to(torch.float16).cpu()  # (batch_size, seq_len, vocab_size)
+        ).logits                                            # (B, L, |V|)
+
+        probs = torch.softmax(logits, dim=-1).cpu()         # float32
     
     # Process results for each item in the chunk
     results = []

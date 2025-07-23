@@ -240,23 +240,24 @@ class MultiPromptPhyID:
             model_info=self.model_info,
             generated_tokens=[],
         )
+        out.data_array = avg_da
 
-        for (sl, sn, tl, tn), sub in avg_da.groupby(["source_layer", "source_node", "target_layer", "target_node"]):
-            phy_ts = PhyIDTimeSeries(
-                model_info=self.model_info,
-                source_layer_index=int(sl),
-                source_node_index=int(sn),
-                target_layer_index=int(tl),
-                target_node_index=int(tn),
-            )
-            for atom in sub.coords["atom"].values:
-                # Keep xarray slice — no NumPy copy
-                setattr(phy_ts, atom, sub.sel(atom=atom))
-            out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
+        # for (sl, sn, tl, tn), sub in avg_da.groupby(["source_layer", "source_node", "target_layer", "target_node"]):
+        #     phy_ts = PhyIDTimeSeries(
+        #         model_info=self.model_info,
+        #         source_layer_index=int(sl),
+        #         source_node_index=int(sn),
+        #         target_layer_index=int(tl),
+        #         target_node_index=int(tn),
+        #     )
+        #     for atom in sub.coords["atom"].values:
+        #         # Keep xarray slice — no NumPy copy
+        #         setattr(phy_ts, atom, sub.sel(atom=atom))
+        #     out.phyid[(int(sl), int(sn), int(tl), int(tn))] = phy_ts
         
-        # Clean the data array 
-        del avg_da
-        gc.collect()
+        # # Clean the data array 
+        # del avg_da
+        # gc.collect()
 
         self.average_prompt_phyid = out
         if save_dir_path:

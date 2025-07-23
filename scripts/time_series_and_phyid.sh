@@ -6,6 +6,8 @@
 #SBATCH --time=5-00:00:00
 #SBATCH --cpus-per-task=80
 
+# h100-agentS-train or cpu
+
 # Activate Conda
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate int

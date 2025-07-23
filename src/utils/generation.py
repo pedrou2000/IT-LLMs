@@ -41,31 +41,29 @@ def _process_chunk(
     tokenizer: PreTrainedTokenizer,
     enc_list: List[BatchEncoding],
     max_new_tokens: int,
-    pad_id: int,
+    pad_id: int,            # kept for call signature; no longer used
     device: torch.device,
 ) -> List[GenResult]:
     """
-    Collate `enc_list`, run greedy generation, and return one GenResult
-    per item: (generated_ids, probs, decoded_text)
+    Greedy‑generate continuations for a micro‑batch and return
+    (tokens_(P+T,), probs_(T,V), decoded_text) for each item.
     """
-    # in_seqs  = [e["input_ids"].squeeze(0)    for e in enc_list]          # 1‑D each
-    # attn_ms  = [e["attention_mask"].squeeze(0) for e in enc_list]
 
-    # input_ids = pad_sequence(in_seqs,  batch_first=True, padding_value=pad_id)
-    # attn_mask = pad_sequence(attn_ms,  batch_first=True, padding_value=0)
-
-    # Let the tokenizer pad consistently (left or right as configured)
+    # ------------------------------------------------------------------
+    # 1. Let the tokenizer do the padding
+    # ------------------------------------------------------------------
     batch = tokenizer.pad(
-        enc_list,                # list[BatchEncoding]
-        padding="longest",       # or True
+        enc_list,                    # list[BatchEncoding]
+        padding="longest",
         return_tensors="pt"
     )
-    input_ids  = batch["input_ids"].to(device)
-    attn_mask  = batch["attention_mask"].to(device)
+    input_ids  = batch["input_ids"      ].to(device)
+    attn_mask  = batch["attention_mask" ].to(device)
 
-    input_ids, attn_mask = input_ids.to(device), attn_mask.to(device)
-
-    with torch.no_grad():
+    # ------------------------------------------------------------------
+    # 2. Greedy generation (no sampling, return per‑step scores)
+    # ------------------------------------------------------------------
+    with torch.inference_mode():
         out = model.generate(
             input_ids=input_ids,
             attention_mask=attn_mask,
@@ -73,23 +71,29 @@ def _process_chunk(
             do_sample=False,
             return_dict_in_generate=True,
             output_scores=True,
-            temperature=0.0,
         )
 
-    seqs   = out.sequences                                   # (B , P+T)
-    scores = torch.stack(out.scores, dim=1)                  # (B , T , |V|)
+    seqs   = out.sequences                       # (B , P+T)
+    scores = torch.stack(out.scores, dim=1)      # (B , T , |V|)
 
-    P        = input_ids.size(1)                             # prompt length after padding
-    gen_ids  = seqs[:, :]                                   # (B , P+T)
-    probs    = torch.softmax(scores, dim=-1).to(torch.float16).cpu()   # (B , T , |V|)
+    # ------------------------------------------------------------------
+    # 3. Convert logits to probabilities (float32 for accuracy)
+    # ------------------------------------------------------------------
+    probs = torch.softmax(scores.float(), dim=-1).cpu()   # (B , T , |V|)
 
-    # Decode generated tokens to text (skip special tokens)
-    texts = [tokenizer.decode(ids, skip_special_tokens=True) for ids in gen_ids] 
+    # ------------------------------------------------------------------
+    # 4. Decode full sequences to text
+    # ------------------------------------------------------------------
+    texts = [tokenizer.decode(ids, skip_special_tokens=True) for ids in seqs]
 
+    # ------------------------------------------------------------------
+    # 5. Pack results
+    # ------------------------------------------------------------------
     return [
-        (gid.cpu(), pr, txt)
-        for gid, pr, txt in zip(gen_ids, probs, texts)
+        (ids.cpu(), pr, txt)
+        for ids, pr, txt in zip(seqs, probs, texts)
     ]
+
 
 def _flatten(tokenised: TokenisedPrompt) -> Tuple[List[BatchEncoding], List[Tuple[str | None, int]]]:
     """

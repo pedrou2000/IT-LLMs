@@ -124,7 +124,6 @@ class RankedDeactivationAnalysis:
             tokenize_kwargs={
                 "padding": "longest",     # ← or True
                 "truncation": True,
-                "return_tensors": "pt",
             },
         )
 

@@ -166,83 +166,77 @@ class PromptPhyID:
             Data type of the backing NumPy array (defaults to ``float32``).
         """
 
-        # ------------------------------------------------------------------
-        # 1. Enumerate the node grid once
-        # ------------------------------------------------------------------
+        # ── 1.  Enumerate the full node grid ──────────────────────────────
         source_layers = sorted(prompt_time_series.layers.keys())
-        target_layers = source_layers                      # identical set
-        source_nodes  = sorted(next(iter(prompt_time_series.layers.values())).nodes.keys())
-        target_nodes  = source_nodes                       # identical
+        target_layers = source_layers                                    # identical
 
-        nS_L, nS_N    = len(source_layers), len(source_nodes)
-        nT_L, nT_N    = len(target_layers), len(target_nodes)
+        # **Union of node indices across *all* layers**
+        union_nodes = sorted({n for layer in prompt_time_series.layers.values()
+                                for n in layer.nodes.keys()})
+        source_nodes = union_nodes
+        target_nodes = union_nodes
 
-        # Helper: map (layer,node) → contiguous index
-        s_idx = {(L, N): (source_layers.index(L), source_nodes.index(N))
-                 for L in source_layers for N in source_nodes}
-        t_idx = s_idx  # same mapping for targets
+        nS_L, nS_N = len(source_layers), len(source_nodes)
+        nT_L, nT_N = nS_L, nS_N
 
-        # ------------------------------------------------------------------
-        # 2. We need the atom names and the length of the time axis once.
-        #    Grab them from a *single* (arbitrary) pair to avoid touching
-        #    the full grid twice.
-        # ------------------------------------------------------------------
-        first_SL, first_SN = source_layers[0], source_nodes[0]
-        first_TL, first_TN = target_layers[0], target_nodes[0]
+        # Fast mapping (layer,node) → zero‑based positions
+        idx_lookup = {(L, N): (source_layers.index(L), source_nodes.index(N))
+                    for L in source_layers for N in source_nodes}
 
-        atoms_tmp, _ = calc_PhiID(
-            prompt_time_series.layers[first_SL].nodes[first_SN].time_series,
-            prompt_time_series.layers[first_TL].nodes[first_TN].time_series,
-            tau  = phyid_tau,
-            kind = phyid_kind,
-            redundancy = phyid_redundancy,
-            return_atoms_only=True  # small helper you can add to calc_PhiID
+        # ── 2.  Sample *one* pair to discover atom list + T 
+        sample_SL = source_layers[0]
+        sample_SN = next(iter(prompt_time_series.layers[sample_SL].nodes))
+
+        # pick one target node (can be the same layer – it is only for introspection)
+        sample_TL = source_layers[-1]
+        sample_TN = next(iter(prompt_time_series.layers[sample_TL].nodes))
+
+
+        sample_ts = PhyIDTimeSeries.from_time_series(
+            model_info,
+            sample_SL, sample_SN, sample_TL, sample_TN,
+            source_time_series=prompt_time_series.layers[sample_SL].nodes[sample_SN],
+            target_time_series=prompt_time_series.layers[sample_TL].nodes[sample_TN],
+            phyid_tau=phyid_tau,
+            phyid_kind=phyid_kind,
+            phyid_redundancy=phyid_redundancy,
         )
-        atoms        = atoms_tmp["name"]                   # list[str]
-        T            = atoms_tmp["ts_len"]                 # int
+        atoms = sample_ts.get_atoms_names()
+        T     = len(sample_ts.sts)
+        del sample_ts  # free ASAP
 
-        # Shape of the backing array
+        # ── 3.  Pre‑allocate the NumPy block ──────────────────────────────
         if time_avg:
-            data_shape = (len(atoms), nS_L, nS_N, nT_L, nT_N)
-            data_dims  = ["atom", "source_layer", "source_node",
-                                   "target_layer", "target_node"]
-            data_coords = {
-                "atom": atoms,
-                "source_layer": source_layers,
-                "source_node":  source_nodes,
-                "target_layer": target_layers,
-                "target_node":  target_nodes,
-            }
+            shape = (len(atoms), nS_L, nS_N, nT_L, nT_N)
+            dims  = ["atom", "source_layer", "source_node",
+                            "target_layer", "target_node"]
+            coords = dict(atom=atoms,
+                        source_layer=source_layers,
+                        source_node=source_nodes,
+                        target_layer=target_layers,
+                        target_node=target_nodes)
         else:
-            data_shape = (len(atoms), nS_L, nS_N, nT_L, nT_N, T)
-            data_dims  = ["atom", "source_layer", "source_node",
-                                   "target_layer", "target_node", "time"]
-            data_coords = {
-                "atom": atoms,
-                "source_layer": source_layers,
-                "source_node":  source_nodes,
-                "target_layer": target_layers,
-                "target_node":  target_nodes,
-                "time": np.arange(T),
-            }
+            shape = (len(atoms), nS_L, nS_N, nT_L, nT_N, T)
+            dims  = ["atom", "source_layer", "source_node",
+                            "target_layer", "target_node", "time"]
+            coords = dict(atom=atoms,
+                        source_layer=source_layers,
+                        source_node=source_nodes,
+                        target_layer=target_layers,
+                        target_node=target_nodes,
+                        time=np.arange(T))
+        data = np.empty(shape, dtype=dtype)
 
-        # Pre‑allocate the entire block in one go
-        data = np.empty(data_shape, dtype=dtype)
-
-        # ------------------------------------------------------------------
-        # 3. Main loop – stream into the array and discard intermediates
-        # ------------------------------------------------------------------
-        total_pairs   = (nS_L * nS_N) * (nT_L * nT_N) - (nS_L * nS_N)  # skip self‑pairs
-        samples_seen  = 0
-        cumulative_t  = 0.0
+        # ── 4.  Main loop: stream‑write results ───────────────────────────
+        total_pairs  = (nS_L*nS_N)*(nT_L*nT_N) - (nS_L*nS_N)
+        seen, cum_t  = 0, 0.0
 
         for SL, s_layer in prompt_time_series.layers.items():
             for SN, s_node in s_layer.nodes.items():
                 for TL, t_layer in prompt_time_series.layers.items():
                     for TN, t_node in t_layer.nodes.items():
-
                         if SL == TL and SN == TN:
-                            continue  # self‑pair → skip
+                            continue
 
                         t0 = time.perf_counter()
                         atoms_res, _ = calc_PhiID(
@@ -252,47 +246,39 @@ class PromptPhyID:
                             kind       = phyid_kind,
                             redundancy = phyid_redundancy
                         )
-                        dt = time.perf_counter() - t0
-                        cumulative_t += dt
-                        samples_seen += 1
+                        cum_t += time.perf_counter() - t0
+                        seen  += 1
 
-                        # Determine write slice once
-                        a_slice  = slice(None)                               # all atoms
-                        sL_idx, sN_idx = s_idx[(SL, SN)]
-                        tL_idx, tN_idx = t_idx[(TL, TN)]
+                        # Re‑assemble the atoms into a (n_atoms, T) matrix in the *canonical* order
+                        res_matrix = np.vstack([atoms_res[a] for a in atoms])     # shape (A, T)
+
+                        sL_i, sN_i = idx_lookup[(SL, SN)]
+                        tL_i, tN_i = idx_lookup[(TL, TN)]
 
                         if time_avg:
-                            data[a_slice, sL_idx, sN_idx, tL_idx, tN_idx] = \
-                                atoms_res.mean(axis=-1).astype(dtype)       # (atoms,)
+                            # Reduce along time → (A,)
+                            data[:, sL_i, sN_i, tL_i, tN_i] = res_matrix.mean(axis=1,
+                                                                            dtype=dtype).astype(dtype)
                         else:
-                            data[a_slice, sL_idx, sN_idx, tL_idx, tN_idx, :] = \
-                                atoms_res.astype(dtype)                     # (atoms, T)
+                            # Keep the full time‑series → (A, T)
+                            data[:, sL_i, sN_i, tL_i, tN_i, :] = res_matrix.astype(dtype, copy=False)
 
-                        # Light‑weight progress log
-                        if samples_seen in {1, 10, 100, 1_000, 10_000,
-                                            total_pairs}:
-                            avg = cumulative_t / samples_seen
-                            eta = timedelta(seconds=int(avg * (total_pairs - samples_seen)))
-                            print(f"[ETA] {samples_seen:,}/{total_pairs:,}  "
-                                  f"| avg={avg:5.2f}s  | ETA ≈ {eta}",
-                                  flush=True)
+                        # Report progress at logarithmic intervals
+                        if seen in {1, 10, 100, 1_000, 10_000, total_pairs}:
+                            avg = cum_t / seen
+                            eta = timedelta(seconds=int(avg*(total_pairs-seen)))
+                            print(f"[ETA] {seen:,}/{total_pairs:,} | avg={avg:5.2f}s | ETA≈{eta}",
+                                flush=True)
 
-        # ------------------------------------------------------------------
-        # 4. Wrap the NumPy block into an xarray.DataArray and store it
-        # ------------------------------------------------------------------
+        # ── 5.  Wrap into xarray & stash ──────────────────────────────────
         self.data_array = xr.DataArray(
-            data,
-            dims   = data_dims,
-            coords = data_coords,
-            name   = "phiid",
-            attrs  = dict(model=str(model_info.model_name),
-                          tau=phyid_tau, kind=phyid_kind,
-                          redundancy=phyid_redundancy,
-                          time_avg=time_avg),
+            data, dims=dims, coords=coords, name="phiid",
+            attrs=dict(model=str(model_info.model_name),
+                    tau=phyid_tau, kind=phyid_kind,
+                    redundancy=phyid_redundancy,
+                    time_avg=time_avg)
         )
-
-        # Memory trim – we never stored per‑edge objects
-        self.phyid.clear()      # keep attribute but free any leftovers
+        self.phyid.clear()        # keep attribute but release memory
 
 
     def compute_extra_atoms(self) -> None:

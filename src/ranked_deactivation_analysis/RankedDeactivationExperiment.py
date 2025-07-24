@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 """ranked_deactivation_experiment.py
 
@@ -119,7 +120,7 @@ class RankedDeactivationExperiment:
     # ------------------------------------------------------------------
     # Plotting utilities
     # ------------------------------------------------------------------
-    def plot_overall(self) -> None:
+    def plot_overall(self, plot_dir: Optional[str] = None) -> None:
         """Plot *overall* divergence curves for all stored runs."""
         if not self.runs:
             raise RuntimeError("No runs available – call .run() first.")
@@ -136,9 +137,17 @@ class RankedDeactivationExperiment:
         plt.legend()
         plt.grid(alpha=0.3)
         plt.tight_layout()
-        plt.show()
+        if plot_dir:
+            if not os.path.exists(plot_dir):
+                os.makedirs(plot_dir, exist_ok=True)
+            save_file = os.path.join(plot_dir, f"overall_divergence_plot.png")
+            plt.savefig(save_file, dpi=300)
+            plt.close()
+            print(f"Plot saved to {save_file}")
+        else:
+            plt.show()
 
-    def plot_per_category(self) -> None:
+    def plot_per_category(self, plot_dir: Optional[str] = None) -> None:
         """Plot per‑category divergence curves for every stored run."""
         if not self.runs:
             raise RuntimeError("No runs available – call .run() first.")
@@ -178,7 +187,16 @@ class RankedDeactivationExperiment:
 
         fig.suptitle("Per‑Category Performance Divergence Comparison", fontsize=14)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        plt.show()
+
+        if plot_dir:
+            if not os.path.exists(plot_dir):
+                os.makedirs(plot_dir, exist_ok=True)
+            save_file = os.path.join(plot_dir, f"per_category_divergence_plot.png")
+            plt.savefig(save_file, dpi=300)
+            plt.close()
+            print(f"Plot saved to {save_file}")
+        else:
+            plt.show()
 
     # ------------------------------------------------------------------
     # Convenience dunder methods

@@ -38,6 +38,8 @@ class MultiPromptPhyID:
         phyid_kind: Literal["gaussian", "discrete"] = "gaussian",
         phyid_redundancy: Literal["MMI", "CCS"] = "MMI",
         save_dir_path: str | None = None,
+        data_array_only: bool = False,  # If True, only compute the data array without saving or creating PromptPhyID objects
+        average_time: bool = False,  # If True, compute the average time series for each prompt
     ) -> "MultiPromptPhyID":
         """Create a new ``MultiPromptPhyID`` from a ``MultiPromptTimeSeries``."""
         model_info = multi_prompt_time_series.model_info
@@ -49,7 +51,8 @@ class MultiPromptPhyID:
             generated_tokens = prompt_ts.generated_tokens
             try:
                 prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
-                                                          phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path)
+                                                            phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path, 
+                                                            data_array_only=data_array_only, average_time=average_time)
             except Exception as e:
                 print(f"Error processing prompt {prompt_index}: {e}")
                 continue

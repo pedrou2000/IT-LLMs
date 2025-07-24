@@ -206,16 +206,23 @@ class RankedDeactivationAnalysis:
         """
         print("Getting non-deactivated model results...")
         # Dict[str, List[GenResult]] where GenResult = (tokens, probs, decoded_text)
-        non_deactivated_token_and_logits = get_tokens_and_probs( 
+        non_deactivated_token_and_logits_generate = get_tokens_and_probs( 
             model=self.model, 
             tokenizer=self.tokenizer,
             tokenized_prompts=self.tokenized_prompts, 
             max_new_tokens=self.max_new_tokens, 
             micro_batch_size=micro_batch_size
         )
+        # Re-run with the teacher forcing tokens and logits to avoid numerical differences between underlying 'generate' and 'forward' methods
+        non_deactivated_token_and_logits = get_teacher_forcing_tokens_and_probs(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            non_deactivated_token_and_logits=non_deactivated_token_and_logits_generate,
+            micro_batch_size=micro_batch_size,
+        )
 
         self_kl = self.compute_kl_divergence(
-            non_deactivated_results=non_deactivated_token_and_logits,
+            non_deactivated_results=non_deactivated_token_and_logits_generate,
             deactivated_results=non_deactivated_token_and_logits,  # No deactivation yet
             num_nodes_deactivated=0,
             deactivated_nodes=[]  # No nodes deactivated yet
@@ -251,7 +258,7 @@ class RankedDeactivationAnalysis:
                 deactivated_token_and_logits = get_teacher_forcing_tokens_and_probs( 
                     model=deactivated_model, 
                     tokenizer=self.tokenizer,
-                    non_deactivated_token_and_logits=non_deactivated_token_and_logits,
+                    non_deactivated_token_and_logits=non_deactivated_token_and_logits_generate,
                     micro_batch_size=micro_batch_size,
                 )
                 

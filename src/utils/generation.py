@@ -220,7 +220,7 @@ def _process_teacher_forcing_chunk(
     # ------------------------------------- #
     # 2.  Forward pass — get softmax probs  #
     # ------------------------------------- #
-    with torch.no_grad():
+    with torch.inference_mode():
         logits = model(
             input_ids=input_ids,
             attention_mask=attention_msk,

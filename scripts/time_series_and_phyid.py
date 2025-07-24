@@ -40,6 +40,8 @@ def main():
         phyid_redundancy = cfg.phyid.redundancy,
         # n_workers        = 8,
         save_dir_path = cfg.paths.data_phyid_dir,
+        data_array_only = False,  # If True, only compute the data array without saving or creating PromptPhyID objects
+        average_time = False,  # If True, compute the average
     )
     # phyid.save(dir_path=cfg.paths.data_phyid_dir)
     print("Building data array for phyid")

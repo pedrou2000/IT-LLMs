@@ -12,6 +12,7 @@ import pandas as pd
 from functools import cached_property
 import json
 import pathlib
+from phyid.calculate import calc_PhiID 
 
 
 
@@ -56,7 +57,8 @@ class PromptPhyID:
         da = self.data_array.copy()
 
         # Step 1: Compute the mean across all dimensions except 'atom', 'source_layer', 'source_node'
-        da = da.mean(dim=[ "target_layer", "target_node", "time"]) # shape: (atom, source_layer, source_node)
+        dims = [dim for dim in da.dims if dim not in ["atom", "source_layer", "source_node"]]
+        da = da.mean(dim=dims)
 
         # Step 2: Compute the difference between 'sts' and 'rtr'
         diff = da.sel(atom="sts") - da.sel(atom="rtr")  # shape: (source_layer, source_node) 
@@ -77,7 +79,7 @@ class PromptPhyID:
     @classmethod
     def from_time_series(cls, prompt_time_series: PromptTimeSeries, model_info: ModelInformation, prompt_index: int, generated_tokens: Sequence[str] = None,
                          phyid_tau: int = 1, phyid_kind: Literal["gaussian", "discrete"] = "gaussian", phyid_redundancy: Literal["MMI", "CCS"] = "MMI",
-                         save_dir_path: Union[str, None] = None) -> "PromptPhyID":
+                         save_dir_path: Union[str, None] = None, data_array_only: bool = False, average_time: bool = False) -> "PromptPhyID":
         """Create a new PromptPhyID with the given prompt index and model information."""
         if save_dir_path:
             save_file = os.path.join(save_dir_path, f"prompt_{prompt_index}.pkl")
@@ -88,7 +90,10 @@ class PromptPhyID:
                 return cls.load(save_file)
 
         obj = cls(prompt_index, model_info, generated_tokens=generated_tokens)
-        obj._compute_phyid(prompt_time_series, model_info, phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy)
+        if data_array_only:
+            obj._compute_phyid_data_array(prompt_time_series, model_info, phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, time_avg=average_time)
+        else:
+            obj._compute_phyid(prompt_time_series, model_info, phyid_tau=phyid_tau, phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy)
         if save_dir_path:
             obj.save(save_file)
             print(f"PromptPhyID saved to {save_file}")
@@ -135,6 +140,160 @@ class PromptPhyID:
 
                         # Store result
                         self.phyid[(source_layer_index, source_node_index, target_layer_index, target_node_index)] = phyid_ts
+
+    def _compute_phyid_data_array(
+        self,
+        prompt_time_series: PromptTimeSeries,
+        model_info: ModelInformation,
+        *,
+        phyid_tau: int = 1,
+        phyid_kind: Literal["gaussian", "discrete"] = "gaussian",
+        phyid_redundancy: Literal["MMI", "CCS"] = "MMI",
+        time_avg: bool = False,           
+        dtype: np.dtype = np.float32,     # let the caller pick e.g. float16 for huge jobs
+    ) -> None:
+        """
+        Compute the Φ‑ID decomposition **for every ordered pair of nodes**
+        and store the result straight into `self.data_array`.
+
+        Parameters
+        ----------
+        time_avg
+            If ``True`` the time dimension is averaged out as soon as each pair
+            is computed, so nothing larger than
+            ``(atoms, SL, SN, TL, TN)`` is ever materialised.
+        dtype
+            Data type of the backing NumPy array (defaults to ``float32``).
+        """
+
+        # ------------------------------------------------------------------
+        # 1. Enumerate the node grid once
+        # ------------------------------------------------------------------
+        source_layers = sorted(prompt_time_series.layers.keys())
+        target_layers = source_layers                      # identical set
+        source_nodes  = sorted(next(iter(prompt_time_series.layers.values())).nodes.keys())
+        target_nodes  = source_nodes                       # identical
+
+        nS_L, nS_N    = len(source_layers), len(source_nodes)
+        nT_L, nT_N    = len(target_layers), len(target_nodes)
+
+        # Helper: map (layer,node) → contiguous index
+        s_idx = {(L, N): (source_layers.index(L), source_nodes.index(N))
+                 for L in source_layers for N in source_nodes}
+        t_idx = s_idx  # same mapping for targets
+
+        # ------------------------------------------------------------------
+        # 2. We need the atom names and the length of the time axis once.
+        #    Grab them from a *single* (arbitrary) pair to avoid touching
+        #    the full grid twice.
+        # ------------------------------------------------------------------
+        first_SL, first_SN = source_layers[0], source_nodes[0]
+        first_TL, first_TN = target_layers[0], target_nodes[0]
+
+        atoms_tmp, _ = calc_PhiID(
+            prompt_time_series.layers[first_SL].nodes[first_SN].time_series,
+            prompt_time_series.layers[first_TL].nodes[first_TN].time_series,
+            tau  = phyid_tau,
+            kind = phyid_kind,
+            redundancy = phyid_redundancy,
+            return_atoms_only=True  # small helper you can add to calc_PhiID
+        )
+        atoms        = atoms_tmp["name"]                   # list[str]
+        T            = atoms_tmp["ts_len"]                 # int
+
+        # Shape of the backing array
+        if time_avg:
+            data_shape = (len(atoms), nS_L, nS_N, nT_L, nT_N)
+            data_dims  = ["atom", "source_layer", "source_node",
+                                   "target_layer", "target_node"]
+            data_coords = {
+                "atom": atoms,
+                "source_layer": source_layers,
+                "source_node":  source_nodes,
+                "target_layer": target_layers,
+                "target_node":  target_nodes,
+            }
+        else:
+            data_shape = (len(atoms), nS_L, nS_N, nT_L, nT_N, T)
+            data_dims  = ["atom", "source_layer", "source_node",
+                                   "target_layer", "target_node", "time"]
+            data_coords = {
+                "atom": atoms,
+                "source_layer": source_layers,
+                "source_node":  source_nodes,
+                "target_layer": target_layers,
+                "target_node":  target_nodes,
+                "time": np.arange(T),
+            }
+
+        # Pre‑allocate the entire block in one go
+        data = np.empty(data_shape, dtype=dtype)
+
+        # ------------------------------------------------------------------
+        # 3. Main loop – stream into the array and discard intermediates
+        # ------------------------------------------------------------------
+        total_pairs   = (nS_L * nS_N) * (nT_L * nT_N) - (nS_L * nS_N)  # skip self‑pairs
+        samples_seen  = 0
+        cumulative_t  = 0.0
+
+        for SL, s_layer in prompt_time_series.layers.items():
+            for SN, s_node in s_layer.nodes.items():
+                for TL, t_layer in prompt_time_series.layers.items():
+                    for TN, t_node in t_layer.nodes.items():
+
+                        if SL == TL and SN == TN:
+                            continue  # self‑pair → skip
+
+                        t0 = time.perf_counter()
+                        atoms_res, _ = calc_PhiID(
+                            src        = s_node.time_series,
+                            trg        = t_node.time_series,
+                            tau        = phyid_tau,
+                            kind       = phyid_kind,
+                            redundancy = phyid_redundancy
+                        )
+                        dt = time.perf_counter() - t0
+                        cumulative_t += dt
+                        samples_seen += 1
+
+                        # Determine write slice once
+                        a_slice  = slice(None)                               # all atoms
+                        sL_idx, sN_idx = s_idx[(SL, SN)]
+                        tL_idx, tN_idx = t_idx[(TL, TN)]
+
+                        if time_avg:
+                            data[a_slice, sL_idx, sN_idx, tL_idx, tN_idx] = \
+                                atoms_res.mean(axis=-1).astype(dtype)       # (atoms,)
+                        else:
+                            data[a_slice, sL_idx, sN_idx, tL_idx, tN_idx, :] = \
+                                atoms_res.astype(dtype)                     # (atoms, T)
+
+                        # Light‑weight progress log
+                        if samples_seen in {1, 10, 100, 1_000, 10_000,
+                                            total_pairs}:
+                            avg = cumulative_t / samples_seen
+                            eta = timedelta(seconds=int(avg * (total_pairs - samples_seen)))
+                            print(f"[ETA] {samples_seen:,}/{total_pairs:,}  "
+                                  f"| avg={avg:5.2f}s  | ETA ≈ {eta}",
+                                  flush=True)
+
+        # ------------------------------------------------------------------
+        # 4. Wrap the NumPy block into an xarray.DataArray and store it
+        # ------------------------------------------------------------------
+        self.data_array = xr.DataArray(
+            data,
+            dims   = data_dims,
+            coords = data_coords,
+            name   = "phiid",
+            attrs  = dict(model=str(model_info.model_name),
+                          tau=phyid_tau, kind=phyid_kind,
+                          redundancy=phyid_redundancy,
+                          time_avg=time_avg),
+        )
+
+        # Memory trim – we never stored per‑edge objects
+        self.phyid.clear()      # keep attribute but free any leftovers
+
 
     def compute_extra_atoms(self) -> None:
         """Compute additional atoms for all PhyIDTimeSeries in this prompt."""
@@ -210,9 +369,10 @@ class PromptPhyID:
             self.build_data_array()
 
         # 2) (sts − rtr) and average over target & time
+        dims = [dim for dim in self.data_array.dims if dim in ["target_layer", "target_node", "time"]]
         diff = (
             self.data_array.sel(atom="sts") - self.data_array.sel(atom="rtr")
-        ).mean(dim=["target_layer", "target_node", "time"])       # → (L, N)
+        ).mean(dim=dims)       # → (L, N)
 
         # 3) Flatten, sort by *descending* value, and assign ranks 1…N
         flat = diff.values.ravel()                                # shape (L·N,)

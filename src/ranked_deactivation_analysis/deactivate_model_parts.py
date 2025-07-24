@@ -4,17 +4,6 @@ import torch
 import torch.nn as nn
 from contextlib import contextmanager
 
-def make_attention_deactivation_hook(heads_to_ablate: list[int], head_dim: int):
-    def deactivation_hook(module, input, output):
-        layer_output = output[0] if isinstance(output, tuple) else output
-        print(f"Layer output shape: {layer_output.shape}, deactivating heads: {heads_to_ablate}")
-        for head in heads_to_ablate:
-            start = head * head_dim
-            end = (head + 1) * head_dim
-            output[..., start:end] = 0.0
-        return output
-    return deactivation_hook
-
 
 def get_model_part_modules(model: PreTrainedModel, module_name: str = "self_attn") -> dict[int, nn.Module]:
     """
@@ -54,9 +43,6 @@ class ModuleDeactivator:
             raise ValueError("Module does not support deactivation. Ensure it has 'deactivated_heads' attribute.")
 
         module.deactivated_heads = nodes
-
-
-
 
 
     @staticmethod

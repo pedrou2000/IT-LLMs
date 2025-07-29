@@ -55,7 +55,6 @@ def main():
     phyid.plot_mean_along('sts', varying_dim='source_layer', plot_dir=plot_dir)
 
 
-# ----------------------------------------------------------------------
 if __name__ == "__main__":                   
     mp.set_start_method("spawn", force=True) 
     main()

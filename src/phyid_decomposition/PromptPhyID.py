@@ -257,8 +257,7 @@ class PromptPhyID:
 
                         if time_avg:
                             # Reduce along time → (A,)
-                            data[:, sL_i, sN_i, tL_i, tN_i] = res_matrix.mean(axis=1,
-                                                                            dtype=dtype).astype(dtype)
+                            data[:, sL_i, sN_i, tL_i, tN_i] = res_matrix.mean(axis=1, dtype=dtype).astype(dtype)
                         else:
                             # Keep the full time‑series → (A, T)
                             data[:, sL_i, sN_i, tL_i, tN_i, :] = res_matrix.astype(dtype, copy=False)

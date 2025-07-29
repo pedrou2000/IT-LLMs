@@ -26,3 +26,4 @@ paths:
   plot_time_series_dir: ${paths.plot_dir}time_series/${paths.activation_method}
   plot_phyid_dir: ${paths.plot_dir}phyid/${paths.phyid_method}
   plot_deactivation_dir: ${paths.plot_dir}deactivation/${paths.phyid_method}${paths.deactivation_method}
+  plot_synergy_through_training_dir: ${paths.plot_dir}synergy_through_training/${paths.phyid_method}

@@ -108,6 +108,7 @@ class RankedDeactivationAnalysis:
         self.tokenizer = tokenizer
         self.prompts = prompts
         self.node_ranking = invert_node_ranking(node_ranking)
+        print(f"Node ranking loaded with {len(self.node_ranking)} nodes: {self.node_ranking[:5]}{'...' if len(self.node_ranking) > 5 else ''}")
         # Randomly shuffle the node ranking list several times to ensure randomness
         # random.shuffle(self.node_ranking)
 
@@ -170,7 +171,6 @@ class RankedDeactivationAnalysis:
                 assert p_na.shape == p_a.shape, f"Shape mismatch for category '{cat}', prompt {p_idx}: {p_na.shape} vs {p_a.shape}"
                 p = p_na.float().clamp_min(eps)
                 q = p_a.float().clamp_min(eps)
-                print(f" ")
                 kl_t = torch.sum(p * torch.log(p / q), dim=-1)  # (T,)
                 kl_tensor[c_idx, p_idx, :kl_t.shape[0]] = kl_t.cpu()
 
@@ -220,14 +220,6 @@ class RankedDeactivationAnalysis:
             non_deactivated_token_and_logits=non_deactivated_token_and_logits_generate,
             micro_batch_size=micro_batch_size,
         )
-
-        self_kl = self.compute_kl_divergence(
-            non_deactivated_results=non_deactivated_token_and_logits_generate,
-            deactivated_results=non_deactivated_token_and_logits,  # No deactivation yet
-            num_nodes_deactivated=0,
-            deactivated_nodes=[]  # No nodes deactivated yet
-        )
-        print(f"Self KL divergence: {self_kl.overall_performance_divergence:.6f}")
 
         deactivation_results = []
         deactivation_schedule = []

@@ -67,8 +67,6 @@ def run_for_checkpoint(step: int, base_cfg: Any) -> None:
         attn_implementation="eager",
         trust_remote_code=True,
     )
-    if cfg.model.it == "random":
-        perturb_model(model, scale=10.0)
     model.eval()
 
     # ---------------------------------------------------------------------
@@ -159,8 +157,11 @@ def main() -> None:
     import sys
     sys.path.insert(0, str(base_cfg.paths.project_root))
 
+    steps = [2**i for i in range(0, 9)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
+
     # for step in range(args.end, args.start - 1, -args.skip):
-    for step in range(args.start, args.end + 1, args.skip):
+    # for step in range(args.start, args.end + 1, args.skip):
+    for step in steps:
         try:
             run_for_checkpoint(step, base_cfg)
         except Exception as e:

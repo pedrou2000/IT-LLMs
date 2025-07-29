@@ -64,6 +64,7 @@ def main():
         max_deactivated_nodes=cfg.deactivation_analysis.max_deactivated_nodes,
         micro_batch_size=100,
         n_randomised_runs=cfg.deactivation_analysis.n_randomised_runs,
+        reverse_kl=cfg.deactivation_analysis.reverse_kl,
     )
     experiment.plot_overall(plot_dir=cfg.paths.plot_deactivation_dir)
     experiment.plot_per_category(plot_dir=cfg.paths.plot_deactivation_dir)

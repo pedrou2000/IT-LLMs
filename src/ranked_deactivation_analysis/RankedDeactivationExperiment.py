@@ -49,6 +49,7 @@ class RankedDeactivationExperiment:
         micro_batch_size: int = 32,
         randomise_order: bool = False,
         save_file_path: Optional[str] = None,
+        reverse_kl: bool = False,
     ) -> RankedDeactivationResults:
         """Run a single deactivation experiment.
 
@@ -78,6 +79,7 @@ class RankedDeactivationExperiment:
             max_deactivated_nodes=max_deactivated_nodes,
             micro_batch_size=micro_batch_size,
             save_file_path=save_file_path,
+            reverse_kl=reverse_kl,
         )
 
         # Stash for later comparison.
@@ -96,6 +98,7 @@ class RankedDeactivationExperiment:
         max_deactivated_nodes: Optional[int] = None,
         micro_batch_size: int = 32,
         n_randomised_runs: int = 1,
+        reverse_kl: bool = False,
     ) -> Dict[str, RankedDeactivationResults]:
         """Run the *original* and a *randomised* deactivation order back‑to‑back."""
 
@@ -105,6 +108,7 @@ class RankedDeactivationExperiment:
             max_deactivated_nodes=max_deactivated_nodes,
             micro_batch_size=micro_batch_size,
             randomise_order=False,
+            reverse_kl=reverse_kl,
         )
         # Run the randomised order multiple times if requested.
         for i in range(n_randomised_runs):
@@ -114,6 +118,7 @@ class RankedDeactivationExperiment:
                 max_deactivated_nodes=max_deactivated_nodes,
                 micro_batch_size=micro_batch_size,
                 randomise_order=True,
+                reverse_kl=reverse_kl,
             )
         return self.runs
 

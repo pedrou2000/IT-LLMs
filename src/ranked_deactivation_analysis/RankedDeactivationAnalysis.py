@@ -123,7 +123,7 @@ class RankedDeactivationAnalysis:
             tokenizer,
             prompt_template=chat_template,
             tokenize_kwargs={
-                "padding": "longest",     # ← or True
+                "padding": "longest",
                 "truncation": True,
             },
         )
@@ -142,6 +142,7 @@ class RankedDeactivationAnalysis:
         deactivated_results: Dict[str, List[tuple]],
         num_nodes_deactivated: int,
         deactivated_nodes: List[Tuple[int, int]],
+        reverse_kl: bool = False
     ) -> PerformanceDivergenceResult:
         """
         Compute a single 3D xarray.DataArray of KL divergences:
@@ -171,7 +172,12 @@ class RankedDeactivationAnalysis:
                 assert p_na.shape == p_a.shape, f"Shape mismatch for category '{cat}', prompt {p_idx}: {p_na.shape} vs {p_a.shape}"
                 p = p_na.float().clamp_min(eps)
                 q = p_a.float().clamp_min(eps)
-                kl_t = torch.sum(p * torch.log(p / q), dim=-1)  # (T,)
+                if reverse_kl:
+                    # KL(q || p)
+                    kl_t = torch.sum(q * torch.log(q / p), dim=-1)
+                else:
+                    # KL(p || q)
+                    kl_t = torch.sum(p * torch.log(p / q), dim=-1)  # (T,)
                 kl_tensor[c_idx, p_idx, :kl_t.shape[0]] = kl_t.cpu()
 
         # ── Wrap in xarray for labeled indexing ──────────────────────────────
@@ -196,7 +202,8 @@ class RankedDeactivationAnalysis:
             deactivate_k_nodes_per_iteration: int, 
             max_deactivated_nodes: Union[int, None] = None, 
             micro_batch_size: int = 32, 
-            save_file_path: str = None
+            save_file_path: str = None,
+            reverse_kl: bool = False
     ) -> RankedDeactivationResults:
         """
         Run the ranked deactivation analysis on the model with the given prompts.
@@ -236,7 +243,7 @@ class RankedDeactivationAnalysis:
             deactivated_nodes_list = [(int(layer), int(node)) for layer, node in nodes_to_deactivate]
             
             print(f"\nIteration {iteration + 1}: Deactivating {num_nodes_to_deactivate} nodes")
-            print(f"Sample deactivated nodes: {deactivated_nodes_list[:5]}{'...' if len(deactivated_nodes_list) > 5 else ''}")
+            print(f"Sample deactivated nodes: {deactivated_nodes_list}{'...' if len(deactivated_nodes_list) > 5 else ''}")
 
             # Deactivate the nodes in the model temporarily only for this iteration
             with deactivate_model_parts(
@@ -260,7 +267,8 @@ class RankedDeactivationAnalysis:
                     non_deactivated_results=non_deactivated_token_and_logits,
                     deactivated_results=deactivated_token_and_logits,
                     num_nodes_deactivated=num_nodes_to_deactivate,
-                    deactivated_nodes=deactivated_nodes_list
+                    deactivated_nodes=deactivated_nodes_list,
+                    reverse_kl=reverse_kl
                 )
                 
                 print(f"Overall performance divergence: {divergence_result.overall_performance_divergence:.6f}")

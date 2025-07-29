@@ -1,3 +1,4 @@
 deactivate_k_nodes_per_iteration: 5
 max_deactivated_nodes: 100
 n_randomised_runs: 5
+reverse_kl: false

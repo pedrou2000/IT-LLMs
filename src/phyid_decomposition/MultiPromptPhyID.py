@@ -49,13 +49,13 @@ class MultiPromptPhyID:
             # Create a PromptPhyID for each prompt
             print(f"Processing prompt {prompt_index+1}/{len(multi_prompt_time_series.prompts)} with {len(prompt_ts.generated_tokens)} generated tokens.")
             generated_tokens = prompt_ts.generated_tokens
-            try:
-                prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
-                                                            phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path, 
-                                                            data_array_only=data_array_only, average_time=average_time)
-            except Exception as e:
-                print(f"Error processing prompt {prompt_index}: {e}")
-                continue
+            # try:
+            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
+                                                        phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path, 
+                                                        data_array_only=data_array_only, average_time=average_time)
+            # except Exception as e:
+                # print(f"Error processing prompt {prompt_index}: {e}")
+                # continue
             obj.prompts[prompt_index] = prompt_phi_id
 
         return obj
@@ -133,7 +133,10 @@ class MultiPromptPhyID:
         # 1. Build (or fetch) each prompt-level DataArray
         da_list, prompt_labels = [], []
         for p_idx, prompt in self.prompts.items():
-            da = prompt.build_data_array()        # <-- reuse!
+            if prompt.data_array is not None:
+                da = prompt.data_array
+            else:
+                da = prompt.build_data_array()        # <-- reuse!
             da_list.append(da)
             prompt_labels.append(p_idx)
 
@@ -157,8 +160,9 @@ class MultiPromptPhyID:
         whose Φ-ID time-series are the mean over prompts, **without**
         collapsing node-pair or time dimensions.
         """
-        da = self.data_array if self.data_array is not None else self.build_data_array()
-        avg_da = da.mean(dim=["prompt", "time"]) # [atom, source_layer, …, time]
+        da = self.data_array # if self.data_array is not None else self.build_data_array()
+        dims = ["prompt", "time"]
+        avg_da = da.mean(dim=[dim for dim in da.dims if dim in dims], keep_attrs=True)
 
         # ------------------------------------------------------------------
         # 2 · Convert the 6-D DataArray back into a PromptPhyID wrapper

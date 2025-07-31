@@ -32,6 +32,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 import os
+import hydra
+from omegaconf import DictConfig, OmegaConf
+import sys
+
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # --- project‑local imports ----------------------------------------------------
 from src.utils import perturb_model
@@ -223,25 +230,14 @@ def plot_for_checkpoints(
 
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run activation+PhyID pipeline for many Pythia checkpoints")
-    parser.add_argument("--start", type=int, default=0, help="First step (inclusive)")
-    parser.add_argument("--end",   type=int, default=143000, help="Last step (inclusive)")
-    parser.add_argument("--skip",  type=int, default=5000, help="Step size between checkpoints")
-    args = parser.parse_args()
+@hydra.main(config_path="../config", config_name="config", version_base="1.3")
+def main(cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg))
 
-    # Load *base* Hydra config once.  All overrides happen in‑memory.
-    with initialize(config_path="../config", version_base="1.3"):
-        base_cfg = compose(config_name="config")
-
-    # Ensure project root is discoverable
-    import sys
-    sys.path.insert(0, str(base_cfg.paths.project_root))
-
-    steps = [2**i for i in range(0, 9)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
+    steps = [2**i for i in range(0, 10)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
     # steps = [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000] 
 
-    plot_for_checkpoints(steps, base_cfg)
+    plot_for_checkpoints(steps, cfg)
 
 
 if __name__ == "__main__":

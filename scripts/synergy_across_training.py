@@ -20,16 +20,19 @@ you have the storage and GPU availability.
 from __future__ import annotations
 
 import gc
-import argparse
 from pathlib import Path
-from typing import List, Any
-
+from typing import List
 import torch
-from hydra import compose, initialize
-from omegaconf import OmegaConf
+import hydra
+from omegaconf import DictConfig, OmegaConf
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import sys, os
 
-# --- project‑local imports ----------------------------------------------------
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+
 from src.utils import perturb_model
 from src.activation_recorder import ActivationRecorder, MultiPromptActivations
 from src.time_series_activations import MultiPromptTimeSeries
@@ -66,6 +69,7 @@ def run_for_checkpoint(step: int, base_cfg: Any) -> None:
         device_map="auto",
         attn_implementation="eager",
         trust_remote_code=True,
+        # use_safetensors=True,
     )
     model.eval()
 
@@ -142,31 +146,14 @@ def run_for_checkpoint(step: int, base_cfg: Any) -> None:
 # Main entry point – iterate over the whole training trajectory
 # -----------------------------------------------------------------------------
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run activation+PhyID pipeline for many Pythia checkpoints")
-    parser.add_argument("--start", type=int, default=0, help="First step (inclusive)")
-    parser.add_argument("--end",   type=int, default=143000, help="Last step (inclusive)")
-    parser.add_argument("--skip",  type=int, default=5000, help="Step size between checkpoints")
-    args = parser.parse_args()
-
-    # Load *base* Hydra config once.  All overrides happen in‑memory.
-    with initialize(config_path="../config", version_base="1.3"):
-        base_cfg = compose(config_name="config")
-
-    # Ensure project root is discoverable
-    import sys
-    sys.path.insert(0, str(base_cfg.paths.project_root))
-
-    steps = [2**i for i in range(0, 9)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
-
-    # for step in range(args.end, args.start - 1, -args.skip):
-    # for step in range(args.start, args.end + 1, args.skip):
+@hydra.main(config_path="../config", config_name="config", version_base="1.3")
+def main(cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg))
+    
+    steps = [2**i for i in range(0, 10)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
     for step in steps:
-        try:
-            run_for_checkpoint(step, base_cfg)
-        except Exception as e:
-            print(f"[Warning] Checkpoint step{step:06d} failed with error: {e}")
-            continue
+        run_for_checkpoint(step, cfg)
+
 
 
 if __name__ == "__main__":

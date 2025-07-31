@@ -4,7 +4,6 @@
 #SBATCH --error=logs/phiid-%j.out
 #SBATCH --partition=cpu
 #SBATCH --time=5-00:00:00
-#SBATCH --cpus-per-task=80
 
 # h100-agentS-train or cpu
 

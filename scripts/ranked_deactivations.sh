@@ -2,8 +2,8 @@
 #SBATCH --job-name=phiid
 #SBATCH --output=logs/phiid-%j.out
 #SBATCH --error=logs/phiid-%j.out
-#SBATCH --partition=h100-agentS-train
-#SBATCH --gres=gpu:1
+#SBATCH --partition=agentS-xlong
+#SBATCH --gres=gpu:h200:1
 
 # Activate Conda
 source ~/miniconda3/etc/profile.d/conda.sh

@@ -168,6 +168,7 @@ class PromptTimeSeries:
         """
         # decide whether to show tokens on x‑axis
         labels = list(self.generated_tokens.values())
+        labels = [t.replace("$", r"\$").replace("{", "").replace("}", "") for t in labels]
         print(f"Prompt {self.prompt_index} has {len(labels)} generated tokens: {labels}")
         use_tokens = (token_x is True) or (token_x == "auto" and labels)
 

@@ -184,7 +184,7 @@ class PromptPhyID:
                     for L in source_layers for N in source_nodes}
 
         # ── 2.  Sample *one* pair to discover atom list + T 
-        sample_SL = source_layers[0]
+        sample_SL = source_layers[-2]
         sample_SN = next(iter(prompt_time_series.layers[sample_SL].nodes))
 
         # pick one target node (can be the same layer – it is only for introspection)
@@ -246,6 +246,7 @@ class PromptPhyID:
                             kind       = phyid_kind,
                             redundancy = phyid_redundancy
                         )
+                        atoms_res['str_'] = atoms_res['str'] 
                         cum_t += time.perf_counter() - t0
                         seen  += 1
 

@@ -43,16 +43,21 @@ def main():
         data_array_only = True,  # If True, only compute the data array without saving or creating PromptPhyID objects
         average_time = True,  # If True, compute the average
     )
-    # phyid.save(dir_path=cfg.paths.data_phyid_dir)
+    phyid.save(dir_path=cfg.paths.data_phyid_dir)
     print("Building data array for phyid")
     phyid.build_data_array()
     print("Computing average prompt phyid")
-    phyid = phyid.compute_average_prompt_phyid_stream(save_dir_path=cfg.paths.data_phyid_dir)
+    phyid = phyid.compute_average_prompt_phyid(save_dir_path=cfg.paths.data_phyid_dir)
 
     print("Plotting phyid results...", flush=True)
     plot_dir = cfg.paths.plot_phyid_dir
     phyid.node_heatmap(atom='sts', plot_dir=plot_dir)
     phyid.plot_mean_along('sts', varying_dim='source_layer', plot_dir=plot_dir)
+
+    node_ranking = phyid.syn_minus_red_rank
+    phyid.plot_syn_minus_red_rank_per_node(node_ranking, plot_dir=cfg.paths.plot_phyid_dir)
+    phyid.plot_syn_minus_red_rank_per_layer(node_ranking, plot_dir=cfg.paths.plot_phyid_dir)
+    print(f"Synergy–Redundancy Rank of N03-L08: {node_ranking.sel(source_node=3, source_layer=8).values}")
 
 
 if __name__ == "__main__":                   

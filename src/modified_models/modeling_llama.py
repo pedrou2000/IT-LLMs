@@ -195,6 +195,8 @@ class LlamaAttention(nn.Module):
 
     def __init__(self, config: LlamaConfig, layer_idx: int):
         super().__init__()
+        self.deactivated_heads = [] # Added for the Freezing Experiments
+
         self.config = config
         self.layer_idx = layer_idx
         self.head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
@@ -236,7 +238,6 @@ class LlamaAttention(nn.Module):
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
         activations["queries"] = query_states
-        print(f"Query states shape: {query_states.shape}")  # Debugging line, can be removed
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
@@ -260,6 +261,12 @@ class LlamaAttention(nn.Module):
         activations["attention_weights"] = attn_weights
         activations["attention_outputs"] = attn_output.transpose(1, 2).contiguous() # Swap dims 1 and 2
 
+        # Deactivate heads for the Freezing Experiments
+        if len(self.deactivated_heads) > 0: 
+            attn_output = attn_output.clone()
+            for head in self.deactivated_heads:
+                attn_output[:, :, head, :] = 0.0
+
 
         # ---------- NEW: per-head projection (for analysis only) -------------
         B, H, Q, Dv  = activations["attention_outputs"].shape                # batch, heads, seq, head-dim
@@ -273,11 +280,6 @@ class LlamaAttention(nn.Module):
 
         # per_head_proj : [B, H, Q, d_model]
         per_head_proj = torch.einsum("bhqd,hdm->bhqm", activations["attention_outputs"], W_heads)
-
-        # (optionally include bias for each head, if you need exact sum-equality)
-        # if self.o_proj.bias is not None:
-        #     per_head_proj = per_head_proj + self.o_proj.bias[None, None, None, :]
-
         activations["projected_outputs"] = per_head_proj
         # ---------------------------------------------------------------------
 

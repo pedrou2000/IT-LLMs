@@ -2,10 +2,15 @@
 
 # Manually hardcoded values (safe to edit before submission)
 MODEL="L32-1"                               # L32-1, D2-16-A2, P-1
-GENERATION="original_prompts"               # subset, original_prompts
-TIME_SERIES="attention_outputs"             # attention_outputs, expert_output
-PHYID="base"                                # discrete
+GENERATION="original_prompts"              # subset, original_prompts
+TIME_SERIES="attention_outputs"            # attention_outputs, expert_output
+PHYID="base"                               # discrete
 DEACTIVATION_ANALYSIS="reverse_kl"
+
+# Which scripts to run (set to true or false)
+RUN_RECORD_ACTIVATIONS=true
+RUN_TIME_SERIES=true
+RUN_RANKED_DEACTIVATIONS=true
 
 # Generate a unique job script at submission time
 TIMESTAMP=$(date +%s)
@@ -30,9 +35,21 @@ export HF_ALLOW_CODE_EVAL=1
 echo "Working directory: \$(pwd)"
 echo "Running with config: model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS"
 
-python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/record_activations.py model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS
-python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/time_series_and_phyid.py model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS
-python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/ranked_deactivations.py model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS
+# Conditionally run each step
+if $RUN_RECORD_ACTIVATIONS; then
+  echo "▶ Running record_activations.py"
+  python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/record_activations.py model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS
+fi
+
+if $RUN_TIME_SERIES; then
+  echo "▶ Running time_series_and_phyid.py"
+  python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/time_series_and_phyid.py model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS
+fi
+
+if $RUN_RANKED_DEACTIVATIONS; then
+  echo "▶ Running ranked_deactivations.py"
+  python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/ranked_deactivations.py model=$MODEL generation=$GENERATION time_series=$TIME_SERIES phyid=$PHYID deactivation_analysis=$DEACTIVATION_ANALYSIS
+fi
 EOF
 
 chmod +x "$JOB_SCRIPT"

@@ -17,7 +17,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, List
 
 import torch
 import torch.utils.checkpoint
@@ -195,7 +195,9 @@ class LlamaAttention(nn.Module):
 
     def __init__(self, config: LlamaConfig, layer_idx: int):
         super().__init__()
-        self.deactivated_heads = [] # Added for the Freezing Experiments
+        self.deactivated_heads = []
+        self._deactivated_heads_tensor = None
+        self.noise_std = None  # None = zero-out, else Gaussian noise
 
         self.config = config
         self.layer_idx = layer_idx
@@ -217,6 +219,17 @@ class LlamaAttention(nn.Module):
         self.o_proj = nn.Linear(
             config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
         )
+
+    def set_deactivated_heads(self, heads: List[int], noise_std: Optional[float] = None):
+        """
+        Set the attention heads to deactivate, optionally with noise.
+        
+        :param heads: List of head indices to deactivate.
+        :param noise_std: If None, deactivate by zeroing. If float, add Gaussian noise with this std.
+        """
+        self.deactivated_heads = heads
+        self.noise_std = noise_std
+        self._deactivated_heads_tensor = (torch.tensor(heads, dtype=torch.long) if heads else None)
 
     def forward(
         self,
@@ -262,10 +275,13 @@ class LlamaAttention(nn.Module):
         activations["attention_outputs"] = attn_output.transpose(1, 2).contiguous() # Swap dims 1 and 2
 
         # Deactivate heads for the Freezing Experiments
-        if len(self.deactivated_heads) > 0: 
-            attn_output = attn_output.clone()
-            for head in self.deactivated_heads:
-                attn_output[:, :, head, :] = 0.0
+        if self._deactivated_heads_tensor is not None:
+            heads = self._deactivated_heads_tensor.to(attn_output.device)
+            if self.noise_std is None:
+                attn_output[:, :, heads, :] = 0.0
+            else:
+                noise = torch.randn_like(attn_output[:, :, heads, :]) * self.noise_std
+                attn_output[:, :, heads, :] += noise
 
 
         # ---------- NEW: per-head projection (for analysis only) -------------

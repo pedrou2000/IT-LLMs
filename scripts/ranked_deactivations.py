@@ -66,6 +66,7 @@ def main(cfg: DictConfig) -> None:
         n_randomised_runs=cfg.deactivation_analysis.n_randomised_runs,
         reverse_kl=cfg.deactivation_analysis.reverse_kl,
         run_reverse_ranking=cfg.deactivation_analysis.run_reverse_ranking,
+        noise_std=cfg.deactivation_analysis.noise_std,
     )
     experiment.plot_overall(plot_dir=cfg.paths.plot_deactivation_dir)
     experiment.plot_per_category(plot_dir=cfg.paths.plot_deactivation_dir)

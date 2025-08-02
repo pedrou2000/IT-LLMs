@@ -1,5 +1,5 @@
 from transformers import PreTrainedModel, PreTrainedTokenizer
-from typing import List, Tuple, Dict, Union
+from typing import List, Optional, Tuple, Dict, Union
 import torch
 import torch.nn as nn
 from contextlib import contextmanager
@@ -32,25 +32,24 @@ def group_nodes_by_layer(nodes_to_deactivate: List[Tuple[int, int]]) -> Dict[int
 
 class ModuleDeactivator:
     @staticmethod
-    def deactivate_self_attn(module: nn.Module, nodes: List[int]):
+    def deactivate_self_attn(module: nn.Module, nodes: List[int], noise_std: Optional[float] = None):
         """
         Deactivate self-attention heads in the module by setting their weights to zero.
         
         :param module: The self-attention module to modify.
         :param nodes: List of node indices (heads) to deactivate.
         """
-        if not hasattr(module, 'deactivated_heads'):
-            raise ValueError("Module does not support deactivation. Ensure it has 'deactivated_heads' attribute.")
-
-        module.deactivated_heads = nodes
+        if not hasattr(module, 'set_deactivated_heads'):
+            raise ValueError("Module does not support deactivation. Implement `set_deactivated_heads`.")
+        module.set_deactivated_heads(nodes, noise_std)
 
 
     @staticmethod
-    def deactivate_mlp(module: nn.Module, nodes: List[int]):
+    def deactivate_mlp(module: nn.Module, nodes: List[int], noise_std: Optional[float] = None):
         raise NotImplementedError()
     
     @staticmethod
-    def deactivate_selected_nodes(module: nn.Module, nodes: List[int], module_type: str):
+    def deactivate_selected_nodes(module: nn.Module, nodes: List[int], module_type: str = "self_attn", noise_std: Optional[float] = None):
         """
         Deactivate specific nodes in the module.
 
@@ -61,7 +60,7 @@ class ModuleDeactivator:
         fn = getattr(ModuleDeactivator, f"deactivate_{module_type}", None)
         if fn is None:
             raise ValueError(f"Unsupported module type: {module_type}")
-        return fn(module, nodes)
+        return fn(module=module, nodes=nodes, noise_std=noise_std)
 
 
 
@@ -70,6 +69,7 @@ def deactivate_model_parts(
     model: PreTrainedModel,
     nodes_to_deactivate: List[Tuple[int, int]],
     module_name: str = "self_attn", # "self_attn", "mlp", ...
+    noise_std: Optional[float] = None
 ):
     """
     Temporarilly deactivate specific nodes in the model by setting their weights to zero.
@@ -95,7 +95,8 @@ def deactivate_model_parts(
         ModuleDeactivator.deactivate_selected_nodes(
             module=module,
             nodes=nodes,
-            module_type=module_name
+            module_type=module_name, # e.g., "self_attn", "mlp"
+            noise_std=noise_std
         )
 
     try:

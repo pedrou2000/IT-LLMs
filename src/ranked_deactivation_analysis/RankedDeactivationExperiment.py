@@ -51,6 +51,7 @@ class RankedDeactivationExperiment:
         reverse_order: bool = False,
         save_file_path: Optional[str] = None,
         reverse_kl: bool = False,
+        noise_std: Optional[float] = None,
     ) -> RankedDeactivationResults:
         """Run a single deactivation experiment.
 
@@ -84,6 +85,7 @@ class RankedDeactivationExperiment:
             micro_batch_size=micro_batch_size,
             save_file_path=save_file_path,
             reverse_kl=reverse_kl,
+            noise_std=noise_std,
         )
 
         # Stash for later comparison.
@@ -104,6 +106,7 @@ class RankedDeactivationExperiment:
         n_randomised_runs: int = 1,
         reverse_kl: bool = False,
         run_reverse_ranking: bool = False,
+        noise_std: Optional[float] = None,
     ) -> Dict[str, RankedDeactivationResults]:
         """Run the *original* and a *randomised* deactivation order back‑to‑back."""
 
@@ -115,6 +118,7 @@ class RankedDeactivationExperiment:
             micro_batch_size=micro_batch_size,
             randomise_order=False,
             reverse_kl=reverse_kl,
+            noise_std=noise_std,
         )
 
         # Reverse Synergistic Order
@@ -127,6 +131,7 @@ class RankedDeactivationExperiment:
                 randomise_order=False,
                 reverse_order=True,
                 reverse_kl=reverse_kl,
+                noise_std=noise_std,
             )
 
         # Run the randomised order multiple times if requested.
@@ -138,6 +143,7 @@ class RankedDeactivationExperiment:
                 micro_batch_size=micro_batch_size,
                 randomise_order=True,
                 reverse_kl=reverse_kl,
+                noise_std=noise_std,
             )
         return self.runs
 

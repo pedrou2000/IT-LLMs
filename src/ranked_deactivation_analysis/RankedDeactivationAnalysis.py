@@ -2,7 +2,7 @@ import pickle
 import os
 import random
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from typing import List, Tuple, Union, Dict
+from typing import List, Optional, Tuple, Union, Dict
 import xarray as xr
 import torch
 from dataclasses import dataclass
@@ -206,12 +206,13 @@ class RankedDeactivationAnalysis:
         )
   
     def run(
-            self, 
-            deactivate_k_nodes_per_iteration: int, 
-            max_deactivated_nodes: Union[int, None] = None, 
-            micro_batch_size: int = 32, 
-            save_file_path: str = None,
-            reverse_kl: bool = False
+        self, 
+        deactivate_k_nodes_per_iteration: int, 
+        max_deactivated_nodes: Union[int, None] = None, 
+        micro_batch_size: int = 32, 
+        save_file_path: str = None,
+        reverse_kl: bool = False,
+        noise_std: Optional[float] = None
     ) -> RankedDeactivationResults:
         """
         Run the ranked deactivation analysis on the model with the given prompts.
@@ -257,7 +258,9 @@ class RankedDeactivationAnalysis:
             with deactivate_model_parts(
                 model=self.model,
                 nodes_to_deactivate=nodes_to_deactivate,
-                module_name="self_attn"  # or "mlp", etc.
+                module_name="self_attn",  # "self_attn", "mlp", etc.
+                noise_std=noise_std # Optional noise standard deviation for deactivation
+
             ) as deactivated_model:
                 # Re-run the generation with the deactivated nodes
                 # Dict[str, List[GenResult]] where GenResult = (tokens, probs, decoded_text)

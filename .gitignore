@@ -36,4 +36,5 @@ htmlcov/
 # Personalized configuration files
 data/
 logs/
-plots/eleutherai/pythia/1B/base-*/original_prompts/time_series/
+plots/
+plots/*/steps/*/original_prompts/time_series/

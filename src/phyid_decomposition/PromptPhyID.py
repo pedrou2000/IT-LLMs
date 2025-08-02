@@ -337,6 +337,25 @@ class PromptPhyID:
         )
         return self.data_array
 
+    def drop_layer0_from_data_array(self) -> xr.DataArray:
+        """
+        Remove entries corresponding to layer 0 in both source_layer and target_layer
+        from the Φ-ID data array.
+        """
+
+        if not hasattr(self, "data_array") or self.data_array is None:
+            self.build_data_array()
+
+        # Drop layer 0 for both source and target
+        filtered = self.data_array.sel(
+            source_layer=self.data_array.coords["source_layer"] != 0,
+            target_layer=self.data_array.coords["target_layer"] != 0
+        )
+
+        self.data_array = filtered
+        return self.data_array
+
+
     @cached_property
     def syn_minus_red_rank(self) -> xr.DataArray:
         """

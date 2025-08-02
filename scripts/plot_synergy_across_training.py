@@ -234,8 +234,8 @@ def plot_for_checkpoints(
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
 
-    steps = [2**i for i in range(0, 10)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
-    # steps = [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000] 
+    steps = [2**i for i in range(0, 10)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000, 143000]
+    # steps = [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000, 143000] 
 
     plot_for_checkpoints(steps, cfg)
 

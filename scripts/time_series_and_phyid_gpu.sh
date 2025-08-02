@@ -15,4 +15,5 @@ echo "Working directory: $(pwd)"
 
 python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/record_activations.py
 python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/time_series_and_phyid.py
+python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/ranked_deactivations.py
 # python /home/p84400019/projects/consciousness-llms/IT-LLMs/scripts/compute_average_prompt.py

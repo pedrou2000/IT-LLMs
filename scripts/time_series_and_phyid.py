@@ -2,17 +2,17 @@
 import multiprocessing as mp
 import sys, os
 from pathlib import Path
+import hydra
+from omegaconf import DictConfig, OmegaConf
+import sys
 
-def main():
-    # ---------------- Hydra config ----------------
-    from hydra import compose, initialize
-    from omegaconf import OmegaConf
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-    initialize(config_path="../config", version_base="1.3")
-    cfg = compose(config_name="config")
+@hydra.main(config_path="../config", config_name="config", version_base="1.3")
+def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
-
-    sys.path.insert(0, str(cfg.paths.project_root))
 
     from src.activation_recorder import MultiPromptActivations
     from src.time_series_activations import MultiPromptTimeSeries

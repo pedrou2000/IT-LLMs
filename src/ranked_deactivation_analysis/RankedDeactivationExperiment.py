@@ -48,6 +48,7 @@ class RankedDeactivationExperiment:
         max_deactivated_nodes: Optional[int] = None,
         micro_batch_size: int = 32,
         randomise_order: bool = False,
+        reverse_order: bool = False,
         save_file_path: Optional[str] = None,
         reverse_kl: bool = False,
     ) -> RankedDeactivationResults:
@@ -72,6 +73,9 @@ class RankedDeactivationExperiment:
         # Optionally shuffle the node ranking.
         if randomise_order:
             analysis.randomize_node_ranking()
+        
+        if reverse_order:
+            analysis.reverse_node_ranking()
 
         # Execute.
         results = analysis.run(
@@ -99,17 +103,32 @@ class RankedDeactivationExperiment:
         micro_batch_size: int = 32,
         n_randomised_runs: int = 1,
         reverse_kl: bool = False,
+        run_reverse_ranking: bool = False,
     ) -> Dict[str, RankedDeactivationResults]:
         """Run the *original* and a *randomised* deactivation order back‑to‑back."""
 
+        # Synergistic Order
         self.run(
-            name="original_order",
+            name="syn_minus_red_order",
             deactivate_k_nodes_per_iteration=deactivate_k_nodes_per_iteration,
             max_deactivated_nodes=max_deactivated_nodes,
             micro_batch_size=micro_batch_size,
             randomise_order=False,
             reverse_kl=reverse_kl,
         )
+
+        # Reverse Synergistic Order
+        if run_reverse_ranking:
+            self.run(
+                name="reverse_syn_minus_red_order",
+                deactivate_k_nodes_per_iteration=deactivate_k_nodes_per_iteration,
+                max_deactivated_nodes=max_deactivated_nodes,
+                micro_batch_size=micro_batch_size,
+                randomise_order=False,
+                reverse_order=True,
+                reverse_kl=reverse_kl,
+            )
+
         # Run the randomised order multiple times if requested.
         for i in range(n_randomised_runs):
             self.run(

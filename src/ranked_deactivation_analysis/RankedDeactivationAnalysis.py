@@ -127,13 +127,21 @@ class RankedDeactivationAnalysis:
                 "truncation": True,
             },
         )
+    
+    def reverse_node_ranking(self):
+        """
+        Reverse the node ranking to get the original order.
+        This is useful for comparing with the original model performance.
+        """
+        self.node_ranking = self.node_ranking[::-1]
+        print(f"Node ranking reversed: {self.node_ranking[:10]}{'...' if len(self.node_ranking) > 5 else ''}")
 
     def randomize_node_ranking(self):
         """
         Randomly shuffle the node ranking list to ensure randomness in deactivation order.
         """
         random.shuffle(self.node_ranking)
-        print("Node ranking randomized.")
+        print(f"Node ranking randomized: {self.node_ranking[:10]}{'...' if len(self.node_ranking) > 5 else ''}")
 
     
     def compute_kl_divergence(

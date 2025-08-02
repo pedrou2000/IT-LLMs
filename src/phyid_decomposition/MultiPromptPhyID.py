@@ -49,13 +49,13 @@ class MultiPromptPhyID:
             # Create a PromptPhyID for each prompt
             print(f"Processing prompt {prompt_index+1}/{len(multi_prompt_time_series.prompts)} with {len(prompt_ts.generated_tokens)} generated tokens.")
             generated_tokens = prompt_ts.generated_tokens
-            # try:
-            prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
+            try:
+                prompt_phi_id = PromptPhyID.from_time_series(prompt_ts, model_info, prompt_index, generated_tokens, phyid_tau=phyid_tau,
                                                         phyid_kind=phyid_kind, phyid_redundancy=phyid_redundancy, save_dir_path=save_dir_path, 
                                                         data_array_only=data_array_only, average_time=average_time)
-            # except Exception as e:
-                # print(f"Error processing prompt {prompt_index}: {e}")
-                # continue
+            except Exception as e:
+                print(f"Error processing prompt {prompt_index}: {e}")
+                continue
             obj.prompts[prompt_index] = prompt_phi_id
 
         return obj

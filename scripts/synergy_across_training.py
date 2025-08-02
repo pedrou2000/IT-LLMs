@@ -51,9 +51,9 @@ def run_for_checkpoint(step: int, base_cfg: Any) -> None:
     revision = f"step{step}"
     cfg.model.revision = revision  # <-- this automatically updates paths if
                                    #     they use ${model.revision}
-    new_shortcode = f"P-1-{step}"
+    new_shortcode = f"{cfg.model.shortcode}-{step}"
     cfg.model.shortcode = new_shortcode
-    cfg.model.it = f"base-{step}"
+    cfg.model.it = f"base/steps/{step}"
 
     print(f"\n=== Processing checkpoint {revision} ===")
 
@@ -150,7 +150,7 @@ def run_for_checkpoint(step: int, base_cfg: Any) -> None:
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     
-    steps = [2**i for i in range(0, 10)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
+    steps = [2**i for i in range(0, 10)] + [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000, 143000]
     for step in steps:
         run_for_checkpoint(step, cfg)
 

@@ -2,17 +2,17 @@
 import multiprocessing as mp
 import sys, os
 from pathlib import Path
+import hydra
+from omegaconf import DictConfig, OmegaConf
+import sys
 
-def main():
-    # ---------------- Hydra config ----------------
-    from hydra import compose, initialize
-    from omegaconf import OmegaConf
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-    initialize(config_path="../config", version_base="1.3")
-    cfg = compose(config_name="config")
+@hydra.main(config_path="../config", config_name="config", version_base="1.3")
+def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
-
-    sys.path.insert(0, str(cfg.paths.project_root))
 
     from src.phyid_decomposition import MultiPromptPhyID, PromptPhyID, PhyIDTimeSeries
     from src.ranked_deactivation_analysis import RankedDeactivationAnalysis, RankedDeactivationResults, RankedDeactivationExperiment
@@ -65,6 +65,7 @@ def main():
         micro_batch_size=100,
         n_randomised_runs=cfg.deactivation_analysis.n_randomised_runs,
         reverse_kl=cfg.deactivation_analysis.reverse_kl,
+        run_reverse_ranking=cfg.deactivation_analysis.run_reverse_ranking,
     )
     experiment.plot_overall(plot_dir=cfg.paths.plot_deactivation_dir)
     experiment.plot_per_category(plot_dir=cfg.paths.plot_deactivation_dir)

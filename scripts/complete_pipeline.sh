@@ -1,31 +1,34 @@
 #!/bin/bash
 
 # Manually hardcoded values (safe to edit before submission)
-MODEL="L31-8-IT"                               # L32-1, D2-16-A2, P-1
-GENERATION="original_prompts"              # subset, original_prompts
+MODEL="L32-1-IT"                               # L32-1, D2-16-A2, P-1
+GENERATION="subset"              # subset, original_prompts
 TIME_SERIES="attention_outputs"            # attention_outputs, expert_output
 PHYID="base"                               # discrete
 DEACTIVATION_ANALYSIS="reverse_kl"
 
 # Which scripts to run (set to true or false)
-RUN_RECORD_ACTIVATIONS=true
-RUN_TIME_SERIES=true
+RUN_RECORD_ACTIVATIONS=false
+RUN_TIME_SERIES=false
 RUN_RANKED_DEACTIVATIONS=true
+
+# GPU Partition 
+PARTITION="long"  # long, xlong
 
 # Generate a unique job script at submission time
 TIMESTAMP=$(date +%s)
 JOB_NAME="${MODEL}_${GENERATION}_${TIME_SERIES}_${PHYID}"
 JOB_SCRIPT="scripts/run_${JOB_NAME}.sh"
-LOG_FILE="logs/${JOB_NAME}_%j.out"
+LOG_FILE="logs/%j-${JOB_NAME}.out"
 
-mkdir -p slurm_jobs logs
+mkdir -p scripts logs
 
 cat > "$JOB_SCRIPT" <<EOF
 #!/bin/bash
-#SBATCH --job-name=phiid-${JOB_NAME}
+#SBATCH --job-name=Φ-${JOB_NAME}
 #SBATCH --output=${LOG_FILE}
 #SBATCH --error=${LOG_FILE}
-#SBATCH --partition=agentS-xlong
+#SBATCH --partition=agentS-${PARTITION}
 #SBATCH --gres=gpu:h200:1
 
 source ~/miniconda3/etc/profile.d/conda.sh

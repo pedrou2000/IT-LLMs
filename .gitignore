@@ -36,5 +36,7 @@ htmlcov/
 # Personalized configuration files
 data/
 logs/
-plots/eleutherai/
-plots/*/steps/*/original_prompts/time_series/
+outputs/
+# plots/eleutherai/
+plots/**/steps/**/original_prompts/time_series/
+plots/**/original_prompts/

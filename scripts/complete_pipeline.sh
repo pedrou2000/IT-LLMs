@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Manually hardcoded values (safe to edit before submission)
-MODEL="L32-1"                               # L32-1, D2-16-A2, P-1
+MODEL="L31-8-IT"                               # L32-1, D2-16-A2, P-1
 GENERATION="original_prompts"              # subset, original_prompts
 TIME_SERIES="attention_outputs"            # attention_outputs, expert_output
 PHYID="base"                               # discrete

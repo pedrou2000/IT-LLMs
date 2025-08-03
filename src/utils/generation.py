@@ -68,6 +68,8 @@ def _process_chunk(
             input_ids=input_ids,
             attention_mask=attn_mask,
             max_new_tokens=max_new_tokens,
+            eos_token_id=tokenizer.eos_token_id,    # ← tell it what “stop” looks like
+            early_stopping=True,                    # ← stop when you hit EOS
             do_sample=False,
             return_dict_in_generate=True,
             output_scores=True,
@@ -214,44 +216,49 @@ def _process_teacher_forcing_chunk(
         padding="longest",
         return_tensors="pt",
     )
-    input_ids     = batch["input_ids"].to(device)
-    attention_msk = batch["attention_mask"].to(device)
+    # after building `batch`:
+    input_ids     = batch["input_ids"].to(device)            # (B, L_pad)
+    attention_msk = batch["attention_mask"].to(device)       # (B, L_pad)
 
-    # ------------------------------------- #
-    # 2.  Forward pass — get softmax probs  #
-    # ------------------------------------- #
     with torch.inference_mode():
         logits = model(
             input_ids=input_ids,
             attention_mask=attention_msk,
             return_dict=True,
-        ).logits                                            # (B, L, |V|)
+        ).logits                                             # (B, L_pad, |V|)
 
-        probs = torch.softmax(logits, dim=-1).cpu()         # float32
-    
-    # Process results for each item in the chunk
+    probs = torch.softmax(logits.float(), dim=-1).cpu()       # ensure float32
+
     results = []
     for i, (original_tokens, original_probs, original_decoded_text) in enumerate(chunk):
-        # Extract probabilities for this sequence  excluding the prompt and the last token
-        seq_len = original_probs.shape[0]           # == T
-        prompt_len = original_tokens.shape[0] - seq_len   # == P
+        T = original_probs.shape[0]                           # generated length
+        L_eff = int(attention_msk[i].sum().item())
+        # Guard: T must be <= L_eff - 1
+        assert 0 < T <= L_eff - 1, f"Bad lengths: T={T}, L_eff={L_eff}"
 
-        start = prompt_len - 1 # logits that predict the generated tokens start at position (P‑1)
-        end   = start + seq_len # avoid the last token logits
+        start = (L_eff - T) - 1
+        end   = L_eff - 1                                     # exclusive
+        item_probs = probs[i, start:end, :]                   # (T, |V|)
 
-        item_probs = probs[i, start:end, :]       # shape (T, |V|)
-
-        # Sample from the probability distribution at each position
-        sampled_tokens = torch.multinomial(item_probs, num_samples=1).squeeze(-1)  # (seq_len,)
+        # (optional) deterministic debug path:
+        # sampled_tokens = item_probs.argmax(dim=-1)
         
-        # Decode the sampled tokens to see what the deactivated model would have generated
+        sampled_tokens = item_probs.argmax(dim=-1)
+        # sampled_tokens = torch.multinomial(item_probs, num_samples=1).squeeze(-1)
         sampled_decoded = tokenizer.decode(sampled_tokens, skip_special_tokens=True)
-            
+
+        # OPTIONAL: sanity asserts to catch misalignment early
+        # 1) Make sure we're not reading from padding
+        assert attention_msk[i, start].item() == 1 and attention_msk[i, end-1].item() == 1
+        # 2) Length check
+        assert item_probs.shape[0] == T
+
         results.append((sampled_tokens, item_probs, sampled_decoded))
+
 
         print(f"Original tokens shape: {original_tokens.shape}")
         print(f"Original probs shape:  {original_probs.shape}")
-        print(f"Inferred prompt_len:   {prompt_len}")
+        # print(f"Inferred prompt_len:   {prompt_len}")
         print(f"Start index: {start}, End index: {end}, Logits shape: {logits[i].shape}")
         print(f"Generated text: {sampled_decoded}")
 

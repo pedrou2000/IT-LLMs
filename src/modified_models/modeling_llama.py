@@ -231,6 +231,15 @@ class LlamaAttention(nn.Module):
         self.noise_std = noise_std
         self._deactivated_heads_tensor = (torch.tensor(heads, dtype=torch.long) if heads else None)
 
+    def clear_deactivated_heads(self):
+        """
+        Clear all deactivation-related flags and buffers.
+        """
+        self.deactivated_heads = []
+        self.noise_std = None
+        self._deactivated_heads_tensor = None
+
+
     def forward(
         self,
         hidden_states: torch.Tensor,

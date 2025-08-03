@@ -246,7 +246,7 @@ class RankedDeactivationAnalysis:
         
         print(f"Starting deactivation analysis: {max_deactivated_nodes} max nodes, {deactivate_k_nodes_per_iteration} per iteration")
         
-        for iteration, last_deactivated_node in enumerate(range(0, max_deactivated_nodes + 1, deactivate_k_nodes_per_iteration)):
+        for iteration, last_deactivated_node in enumerate(range(0, max_deactivated_nodes + deactivate_k_nodes_per_iteration, deactivate_k_nodes_per_iteration)):
             nodes_to_deactivate = self.node_ranking[:last_deactivated_node]
             num_nodes_to_deactivate = len(nodes_to_deactivate)
             deactivated_nodes_list = [(int(layer), int(node)) for layer, node in nodes_to_deactivate]

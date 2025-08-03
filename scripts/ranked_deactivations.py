@@ -62,7 +62,7 @@ def main(cfg: DictConfig) -> None:
     experiment.run_default_and_random(
         deactivate_k_nodes_per_iteration=cfg.deactivation_analysis.deactivate_k_nodes_per_iteration,
         max_deactivated_nodes=cfg.deactivation_analysis.max_deactivated_nodes,
-        micro_batch_size=100,
+        micro_batch_size=cfg.deactivation_analysis.micro_batch_size,
         n_randomised_runs=cfg.deactivation_analysis.n_randomised_runs,
         reverse_kl=cfg.deactivation_analysis.reverse_kl,
         run_reverse_ranking=cfg.deactivation_analysis.run_reverse_ranking,

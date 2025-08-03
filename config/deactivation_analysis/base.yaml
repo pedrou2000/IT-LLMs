@@ -1,6 +1,7 @@
 deactivate_k_nodes_per_iteration: 25
-max_deactivated_nodes: 200
-n_randomised_runs: 2
+max_deactivated_nodes: 300
+n_randomised_runs: 5
+micro_batch_size: 1
 reverse_kl: false
-run_reverse_ranking: false
+run_reverse_ranking: true
 noise_std: null

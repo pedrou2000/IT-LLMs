@@ -5,7 +5,7 @@ MODEL="L32-1-IT"                               # L32-1, D2-16-A2, P-1
 GENERATION="subset"              # subset, original_prompts
 TIME_SERIES="attention_outputs"            # attention_outputs, expert_output
 PHYID="base"                               # discrete
-DEACTIVATION_ANALYSIS="noisy"
+DEACTIVATION_ANALYSIS="base"         # reverse_kl, noisy
 
 # Which scripts to run (set to true or false)
 RUN_RECORD_ACTIVATIONS=false

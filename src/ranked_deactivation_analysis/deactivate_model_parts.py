@@ -107,5 +107,9 @@ def deactivate_model_parts(
                 continue
             
             module = modules_to_deactivate[layer_idx]
-            if hasattr(module, 'deactivated_heads'):
+            if hasattr(module, 'clear_deactivated_heads'):
+                module.clear_deactivated_heads()
+            elif hasattr(module, 'deactivated_heads'):
                 module.deactivated_heads = []
+            else:
+                print(f"Warning: Module {module} does not support clearing deactivated heads. Skipping reset.")

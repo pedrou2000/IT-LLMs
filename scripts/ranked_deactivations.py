@@ -68,8 +68,18 @@ def main(cfg: DictConfig) -> None:
         run_reverse_ranking=cfg.deactivation_analysis.run_reverse_ranking,
         noise_std=cfg.deactivation_analysis.noise_std,
     )
-    experiment.plot_overall(plot_dir=cfg.paths.plot_deactivation_dir)
-    experiment.plot_per_category(plot_dir=cfg.paths.plot_deactivation_dir)
+    
+    for fraction in cfg.deactivation_analysis.fractions_plot:
+        experiment.plot_overall(
+            plot_dir=cfg.paths.plot_deactivation_dir,
+            aggregate_random=cfg.deactivation_analysis.aggregate_random,
+            fraction=fraction,
+        )
+        experiment.plot_per_category(
+            plot_dir=cfg.paths.plot_deactivation_dir,
+            aggregate_random=cfg.deactivation_analysis.aggregate_random,
+            fraction=fraction,
+        )
 
 
 

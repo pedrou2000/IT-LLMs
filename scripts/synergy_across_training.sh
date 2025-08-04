@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=phiid
-#SBATCH --output=logs/phiid-%j.out
-#SBATCH --error=logs/phiid-%j.out
+#SBATCH --job-name=Φ-training
+#SBATCH --output=logs/%j-training.out
+#SBATCH --error=logs/%j-training.out
 #SBATCH --partition=agentS-xlong
 #SBATCH --gres=gpu:h200:1
 # h100-agentS-train or cpu

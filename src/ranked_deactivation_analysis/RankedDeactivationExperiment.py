@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import numpy as np
 
 """ranked_deactivation_experiment.py
 
@@ -150,16 +151,77 @@ class RankedDeactivationExperiment:
     # ------------------------------------------------------------------
     # Plotting utilities
     # ------------------------------------------------------------------
-    def plot_overall(self, plot_dir: Optional[str] = None) -> None:
-        """Plot *overall* divergence curves for all stored runs."""
+
+    def _is_random(self, name: str) -> bool:
+        return name.startswith("random_order_")
+
+    def _fraction_mask(self, x, fraction: float):
+        if not (0 < fraction <= 1):
+            raise ValueError("fraction must be in (0, 1].")
+        x_arr = np.asarray(x, dtype=float)
+        cutoff = fraction * float(x_arr.max())
+        mask = x_arr <= cutoff
+        # ensure we show at least the first point
+        if not mask.any():
+            mask = np.zeros_like(x_arr, dtype=bool)
+            mask[0] = True
+        return mask
+
+    
+    def plot_overall(
+        self,
+        plot_dir: Optional[str] = None,
+        *,
+        aggregate_random: bool = False,
+        fraction: float = 1.0,
+    ) -> None:
+        """Plot *overall* divergence curves for all stored runs.
+
+        If `aggregate_random=True`, collapse runs named `random_order_*` into a single
+        mean curve with a shaded ±1 std band.
+
+        `fraction` ∈ (0,1] limits the plot to the first fraction of the deactivation
+        schedule (by x-axis value, i.e., number of deactivated nodes).
+        """
         if not self.runs:
             raise RuntimeError("No runs available – call .run() first.")
 
+        random_items = [(n, r) for n, r in self.runs.items() if self._is_random(n)]
+        nonrandom_items = [(n, r) for n, r in self.runs.items() if not self._is_random(n)]
+
         plt.figure(figsize=(10, 6))
-        for run_name, res in self.runs.items():
-            x = res.deactivation_schedule
-            y = [r.overall_performance_divergence for r in res.deactivation_results]
-            plt.plot(x, y, marker="o", label=run_name)
+
+        # Plot non-random runs as-is (subject to fraction)
+        for run_name, res in nonrandom_items:
+            x = np.asarray(res.deactivation_schedule, dtype=float)
+            y = np.asarray([r.overall_performance_divergence for r in res.deactivation_results], dtype=float)
+            mask = self._fraction_mask(x, fraction)
+            plt.plot(x[mask], y[mask], marker="o", label=run_name)
+
+        # Aggregate the random runs if requested
+        if aggregate_random and random_items:
+            x = np.asarray(random_items[0][1].deactivation_schedule, dtype=float)
+            mask = self._fraction_mask(x, fraction)
+
+            y_stack = []
+            for _, res in random_items:
+                y = np.asarray([r.overall_performance_divergence for r in res.deactivation_results], dtype=float)
+                y_stack.append(y[mask])
+            Y = np.vstack(y_stack)  # (n_runs, n_sel_steps)
+
+            mean = Y.mean(axis=0)
+            band = Y.std(axis=0, ddof=0)
+
+            plt.plot(x[mask], mean, marker="o", label="random_order (mean ± 1σ)")
+            plt.fill_between(x[mask], mean - band, mean + band, alpha=0.2)
+
+        # Otherwise, show each random run (subject to fraction)
+        if not aggregate_random:
+            for run_name, res in random_items:
+                x = np.asarray(res.deactivation_schedule, dtype=float)
+                y = np.asarray([r.overall_performance_divergence for r in res.deactivation_results], dtype=float)
+                mask = self._fraction_mask(x, fraction)
+                plt.plot(x[mask], y[mask], marker="o", label=run_name)
 
         plt.xlabel("Number of Deactivated Nodes")
         plt.ylabel("Overall Performance Divergence (KL)")
@@ -168,19 +230,37 @@ class RankedDeactivationExperiment:
         plt.grid(alpha=0.3)
         plt.tight_layout()
         if plot_dir:
+            plot_dir += 'fraction_' + str(fraction).replace('.', '_') + '/'
             if not os.path.exists(plot_dir):
                 os.makedirs(plot_dir, exist_ok=True)
-            save_file = os.path.join(plot_dir, f"overall_divergence_plot.png")
+            save_file = os.path.join(plot_dir, "overall_divergence_plot.png")
             plt.savefig(save_file, dpi=300)
             plt.close()
             print(f"Plot saved to {save_file}")
         else:
             plt.show()
+  
+    
+    def plot_per_category(
+        self,
+        plot_dir: Optional[str] = None,
+        *,
+        aggregate_random: bool = False,
+        fraction: float = 1.0,
+    ) -> None:
+        """Plot per-category divergence curves for every stored run.
 
-    def plot_per_category(self, plot_dir: Optional[str] = None) -> None:
-        """Plot per‑category divergence curves for every stored run."""
+        If `aggregate_random=True`, collapse runs named `random_order_*` into a single
+        mean curve per category with a shaded ±1 std band.
+
+        `fraction` ∈ (0,1] limits the plot to the first fraction of the deactivation
+        schedule (by x-axis value).
+        """
         if not self.runs:
             raise RuntimeError("No runs available – call .run() first.")
+
+        random_items = [(n, r) for n, r in self.runs.items() if self._is_random(n)]
+        nonrandom_items = [(n, r) for n, r in self.runs.items() if not self._is_random(n)]
 
         # Assume categories are identical across runs – grab from the first.
         first_res = next(iter(self.runs.values()))
@@ -195,19 +275,52 @@ class RankedDeactivationExperiment:
 
         for idx, category in enumerate(categories):
             ax = axes[idx]
-            for run_name, res in self.runs.items():
-                x = res.deactivation_schedule
-                y = [
-                    r.divergence_per_category.sel(category=category).item()
-                    for r in res.deactivation_results
-                ]
-                ax.plot(x, y, marker="o", label=run_name)
+
+            # Plot non-random runs per category (subject to fraction)
+            for run_name, res in nonrandom_items:
+                x = np.asarray(res.deactivation_schedule, dtype=float)
+                y = np.asarray(
+                    [r.divergence_per_category.sel(category=category).item() for r in res.deactivation_results],
+                    dtype=float,
+                )
+                mask = self._fraction_mask(x, fraction)
+                ax.plot(x[mask], y[mask], marker="o", label=run_name)
+
+            # Aggregate randoms if requested
+            if aggregate_random and random_items:
+                x = np.asarray(random_items[0][1].deactivation_schedule, dtype=float)
+                mask = self._fraction_mask(x, fraction)
+
+                y_stack = []
+                for _, res in random_items:
+                    y = np.asarray(
+                        [r.divergence_per_category.sel(category=category).item() for r in res.deactivation_results],
+                        dtype=float,
+                    )
+                    y_stack.append(y[mask])
+                Y = np.vstack(y_stack)
+
+                mean = Y.mean(axis=0)
+                band = Y.std(axis=0, ddof=0)
+
+                ax.plot(x[mask], mean, marker="o", label="random_order (mean ± 1σ)")
+                ax.fill_between(x[mask], mean - band, mean + band, alpha=0.2)
+
+            # Otherwise, show each random run (subject to fraction)
+            if not aggregate_random:
+                for run_name, res in random_items:
+                    x = np.asarray(res.deactivation_schedule, dtype=float)
+                    y = np.asarray(
+                        [r.divergence_per_category.sel(category=category).item() for r in res.deactivation_results],
+                        dtype=float,
+                    )
+                    mask = self._fraction_mask(x, fraction)
+                    ax.plot(x[mask], y[mask], marker="o", label=run_name)
 
             ax.set_title(str(category))
             ax.set_xlabel("# Deactivated Nodes")
             ax.set_ylabel("KL")
             ax.grid(alpha=0.3)
-
             if idx == 0:
                 ax.legend()
 
@@ -215,18 +328,21 @@ class RankedDeactivationExperiment:
         for unused_ax in axes[n_categories:]:
             unused_ax.set_visible(False)
 
-        fig.suptitle("Per‑Category Performance Divergence Comparison", fontsize=14)
+        fig.suptitle("Per-Category Performance Divergence Comparison", fontsize=14)
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
         if plot_dir:
+            plot_dir += 'fraction_' + str(fraction).replace('.', '_') + '/'
             if not os.path.exists(plot_dir):
                 os.makedirs(plot_dir, exist_ok=True)
-            save_file = os.path.join(plot_dir, f"per_category_divergence_plot.png")
+            save_file = os.path.join(plot_dir, "per_category_divergence_plot.png")
             plt.savefig(save_file, dpi=300)
             plt.close()
             print(f"Plot saved to {save_file}")
         else:
             plt.show()
+
+
 
     # ------------------------------------------------------------------
     # Convenience dunder methods

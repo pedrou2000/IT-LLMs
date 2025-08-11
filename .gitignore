@@ -39,4 +39,4 @@ logs/
 outputs/
 # plots/eleutherai/
 plots/**/steps/**/original_prompts/time_series/
-plots/**/original_prompts/
+plots/**/original_prompts/time_series/

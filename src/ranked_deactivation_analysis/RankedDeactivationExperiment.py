@@ -212,8 +212,8 @@ class RankedDeactivationExperiment:
             mean = Y.mean(axis=0)
             band = Y.std(axis=0, ddof=0)
 
-            plt.plot(x[mask], mean, marker="o", label="random_order (mean ± 1σ)")
-            plt.fill_between(x[mask], mean - band, mean + band, alpha=0.2)
+            line, = plt.plot(x[mask], mean, marker="o", label="random_order")
+            plt.fill_between(x[mask], mean - band, mean + band, color=line.get_color(), alpha=0.2)
 
         # Otherwise, show each random run (subject to fraction)
         if not aggregate_random:
@@ -303,8 +303,8 @@ class RankedDeactivationExperiment:
                 mean = Y.mean(axis=0)
                 band = Y.std(axis=0, ddof=0)
 
-                ax.plot(x[mask], mean, marker="o", label="random_order (mean ± 1σ)")
-                ax.fill_between(x[mask], mean - band, mean + band, alpha=0.2)
+                line, = ax.plot(x[mask], mean, marker="o", label="random_order")
+                ax.fill_between(x[mask], mean - band, mean + band, color=line.get_color(), alpha=0.2)
 
             # Otherwise, show each random run (subject to fraction)
             if not aggregate_random:

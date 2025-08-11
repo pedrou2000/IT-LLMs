@@ -1,5 +1,5 @@
 deactivate_k_nodes_per_iteration: 5
-max_deactivated_nodes: 600
+max_deactivated_nodes: 8192
 n_randomised_runs: 5
 micro_batch_size: 1
 reverse_kl: false

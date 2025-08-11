@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Manually hardcoded values (safe to edit before submission)
-MODEL="L31-8-IT"                               # L32-1, D2-16-A2, P-1
+MODEL="L32-1"                               # L32-1, D2-16-A2, P-1
 GENERATION="original_prompts"              # subset, original_prompts
 TIME_SERIES="attention_outputs"            # attention_outputs, expert_output
 PHYID="base"                               # discrete
@@ -13,7 +13,7 @@ RUN_TIME_SERIES=false
 RUN_RANKED_DEACTIVATIONS=true
 
 # GPU Partition 
-PARTITION="long"  # long, xlong
+PARTITION="agentS-long"  # cpu, agentS-long, agentS-xlong
 
 # Generate a unique job script at submission time
 TIMESTAMP=$(date +%s)
@@ -28,7 +28,7 @@ cat > "$JOB_SCRIPT" <<EOF
 #SBATCH --job-name=Φ-${JOB_NAME}
 #SBATCH --output=${LOG_FILE}
 #SBATCH --error=${LOG_FILE}
-#SBATCH --partition=agentS-${PARTITION}
+#SBATCH --partition=${PARTITION}
 #SBATCH --gres=gpu:h200:1
 
 source ~/miniconda3/etc/profile.d/conda.sh

@@ -17,6 +17,18 @@ def main(cfg: DictConfig) -> None:
     from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, AutoConfig
     from src.utils import perturb_model, randomize_model_weights
 
+    # Dynamo Problems
+    import torch._dynamo
+    import torch._dynamo
+    torch._dynamo.config.suppress_errors = True
+    torch._dynamo.config.cache_size_limit = 64  # optional, bigger cache
+    torch._dynamo.reset()
+
+    # Or just turn it off completely:
+    torch._dynamo.disable()
+
+
+
     load_model = True
 
     model_name = cfg.model.hf_name
@@ -30,6 +42,7 @@ def main(cfg: DictConfig) -> None:
             device_map='auto', 
             attn_implementation='eager',  
             trust_remote_code=True,
+            # torch_dtype="float16",
             revision=cfg.model.revision if hasattr(cfg.model, 'revision') else None,
         )
         if cfg.model.it == 'random':

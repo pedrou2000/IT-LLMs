@@ -54,6 +54,25 @@ class AttentionHeadActivations:
         assert self.attention_outputs.shape == (self.model_info.head_dim,), f'Expected attention_outputs shape ({self.model_info.head_dim},), got {self.attention_outputs.shape} for head {self.head_index} in layer {self.layer_index}'
         assert self.projected_outputs.shape == (self.model_info.hidden_size,), f'Expected projected_outputs shape ({self.model_info.hidden_size},), got {self.projected_outputs.shape} for head {self.head_index} in layer {self.layer_index}'
 
+    # helper for containers
+    @staticmethod
+    def _to_cpu_tree(x):
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu()
+        if isinstance(x, dict):
+            return {k: AttentionHeadActivations._to_cpu_tree(v) for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            t = [AttentionHeadActivations._to_cpu_tree(v) for v in x]
+            return type(x)(t) if isinstance(x, tuple) else t
+        return x
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # convert any tensors (or containers thereof) to CPU
+        for k, v in state.items():
+            state[k] = AttentionHeadActivations._to_cpu_tree(v)
+        return state
+
 
 class AttentionLayerActivations:
     """

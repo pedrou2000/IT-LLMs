@@ -78,7 +78,24 @@ class MoEExpertActivations:
     def is_empty(self) -> bool:
         return self.mlp_output is None and self.expert_output is None
 
+    # helper for containers
+    @staticmethod
+    def _to_cpu_tree(x):
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu()
+        if isinstance(x, dict):
+            return {k: MoEExpertActivations._to_cpu_tree(v) for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            t = [MoEExpertActivations._to_cpu_tree(v) for v in x]
+            return type(x)(t) if isinstance(x, tuple) else t
+        return x
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # convert any tensors (or containers thereof) to CPU
+        for k, v in state.items():
+            state[k] = MoEExpertActivations._to_cpu_tree(v)
+        return state
  
 
 class MoELayerActivations:

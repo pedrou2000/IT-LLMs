@@ -1,7 +1,7 @@
 """Time‑series utilities for analysing per‑node activations across multiple prompts."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Sequence, Union
+from typing import Dict, List, Literal, Sequence, Union, Optional, Iterable, Tuple
 import os
 
 import numpy as np
@@ -233,7 +233,133 @@ class PromptTimeSeries:
             print(f"Time-series plot saved to {save_file}")
         else:
             plt.show()
-                
+
+    def _get_token_labels(self) -> List[str]:
+        """Return sanitized token labels (empty if unavailable)."""
+        gt = self.generated_tokens
+        if gt is None:
+            return []
+        # Accept either Sequence[str] or Dict[int, str]
+        if isinstance(gt, dict):
+            labels = list(gt.values())
+        else:
+            labels = list(gt)
+        # Sanitize for matplotlib/TeX
+        labels = [str(t).replace("$", r"\$").replace("{", "").replace("}", "") for t in labels]
+        return labels
+    
+
+    def _get_series(self, layer_idx: int, node_idx: int) -> np.ndarray:
+        if layer_idx not in self.layers:
+            raise KeyError(f"Layer {layer_idx} not found for prompt {self.prompt_index}.")
+        layer_ts = self.layers[layer_idx]
+        if node_idx not in layer_ts.nodes:
+            raise KeyError(f"Node {node_idx} not found in layer {layer_idx} for prompt {self.prompt_index}.")
+        return layer_ts.nodes[node_idx].time_series
+
+    def plot_two_series(
+        self,
+        series_a: Tuple[int, int],              # (layer_index, node_index)
+        series_b: Tuple[int, int],              # (layer_index, node_index)
+        *,
+        token_x: bool | str = "auto",           # as in existing plot(): 'auto' | True | False
+        tokens: Optional[Iterable[int] | slice | Tuple[int, int]] = None,
+        figsize: Tuple[float, float] = (10.0, 5.0),
+        plot_dir: Optional[str] = None,         # save as SVG if provided
+        dpi: int = 300,
+        show: bool = True,                      # call plt.show() (if you’re not saving-only)
+    ) -> None:
+        """Plot exactly two single-node time series (one per subplot).
+
+        Parameters
+        ----------
+        series_a, series_b : (layer_index, node_index)
+            Select which node to plot in each subplot.
+        token_x : bool | {'auto', True, False}
+            Whether to display token strings on the x-axis (falls back to indices).
+        tokens : None | slice | (start, end) | Iterable[int]
+            Restrict which timesteps to display. Examples:
+              * None           → plot all timesteps
+              * slice(10, 50)  → Python slicing semantics (end exclusive)
+              * (10, 50)       → same as slice(10, 50)
+              * [0, 2, 5, 13]  → explicit indices
+        figsize : (width, height)
+            Figure size in inches.
+        plot_dir : str | None
+            If given, saves the figure as an SVG to this path.
+        dpi : int
+            DPI used when saving raster preview (not relevant for SVG strokes).
+        show : bool
+            Whether to call plt.show(). Ignored if running in a headless batch environment.
+        """
+
+        la, na = series_a
+        lb, nb = series_b
+        ts_a = self._get_series(la, na)
+        ts_b = self._get_series(lb, nb)
+
+        # Ensure same length when plotting side-by-side (truncate to min)
+        L = min(len(ts_a), len(ts_b))
+        ts_a = ts_a[:L]
+        ts_b = ts_b[:L]
+
+        # ---- compute which indices to plot ----
+        if tokens is None:
+            idx = np.arange(L)
+        elif isinstance(tokens, slice):
+            idx = np.arange(L)[tokens]
+        elif isinstance(tokens, tuple) and len(tokens) == 2:
+            start, end = tokens
+            idx = np.arange(L)[slice(start, end)]
+        else:
+            # assume iterable of indices
+            idx = np.array(list(tokens), dtype=int)
+            idx = idx[(idx >= 0) & (idx < L)]  # guard against out-of-range
+
+        ts_a = ts_a[idx]
+        ts_b = ts_b[idx]
+
+        # ---- x-axis labels / ticks ----
+        token_labels = self._get_token_labels()
+        token_labels = token_labels[:L] if token_labels else token_labels
+        token_labels = [token_labels[i] for i in idx] if token_labels else token_labels
+
+        use_tokens = (token_x is True) or (token_x == "auto" and len(token_labels) > 0)
+
+        # ---- plotting ----
+        fig, axes = plt.subplots(2, 1, sharex=True, figsize=figsize)
+        ax_a, ax_b = axes
+
+        ax_a.plot(np.arange(len(ts_a)), ts_a)
+        ax_a.set_ylabel(f"Layer {la} • Head {na}")
+        ax_a.margins(x=0)
+
+        ax_b.plot(np.arange(len(ts_b)), ts_b)
+        ax_b.set_ylabel(f"Layer {lb} • Head {nb}")
+        ax_b.margins(x=0)
+        fig.supylabel("Activation", x=0.02)
+
+        # Configure shared x-axis
+        if use_tokens:
+            ax_b.set_xticks(np.arange(len(token_labels)))
+            ax_b.set_xticklabels(token_labels, rotation=90, fontsize="small")
+            ax_b.set_xlabel("Token")
+        else:
+            ax_b.set_xlabel("Timestep")
+
+        fig.tight_layout()
+
+        # ---- save/show ----
+        if plot_dir:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(plot_dir) or ".", exist_ok=True)
+            file_name = plot_dir + "two_series.svg"
+            fig.savefig(file_name, format="svg", dpi=dpi)
+            plt.close(fig)
+            print(f"Two-series SVG saved to {plot_dir}")
+        elif show:
+            plt.show()
+
 
 
 

@@ -53,6 +53,7 @@ class RankedDeactivationExperiment:
         save_file_path: Optional[str] = None,
         reverse_kl: bool = False,
         noise_std: Optional[float] = None,
+        data_deactivation_dir: Optional[str] = None,
     ) -> RankedDeactivationResults:
         """Run a single deactivation experiment.
 
@@ -89,6 +90,10 @@ class RankedDeactivationExperiment:
             noise_std=noise_std,
         )
 
+        if data_deactivation_dir is not None:
+            file_path = os.path.join(data_deactivation_dir, f"{name}.pkl")
+            results.save(file_path)
+
         # Stash for later comparison.
         if name in self.runs:
             raise ValueError(f"Run name '{name}' already exists – choose a new one.")
@@ -108,6 +113,7 @@ class RankedDeactivationExperiment:
         reverse_kl: bool = False,
         run_reverse_ranking: bool = False,
         noise_std: Optional[float] = None,
+        data_deactivation_dir: Optional[str] = None,
     ) -> Dict[str, RankedDeactivationResults]:
         """Run the *original* and a *randomised* deactivation order back‑to‑back."""
 
@@ -120,6 +126,7 @@ class RankedDeactivationExperiment:
             randomise_order=False,
             reverse_kl=reverse_kl,
             noise_std=noise_std,
+            data_deactivation_dir=data_deactivation_dir,
         )
 
         # Reverse Synergistic Order
@@ -133,6 +140,7 @@ class RankedDeactivationExperiment:
                 reverse_order=True,
                 reverse_kl=reverse_kl,
                 noise_std=noise_std,
+                data_deactivation_dir=data_deactivation_dir,
             )
 
         # Run the randomised order multiple times if requested.
@@ -145,6 +153,7 @@ class RankedDeactivationExperiment:
                 randomise_order=True,
                 reverse_kl=reverse_kl,
                 noise_std=noise_std,
+                data_deactivation_dir=data_deactivation_dir,
             )
         return self.runs
 

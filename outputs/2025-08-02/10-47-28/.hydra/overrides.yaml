@@ -1,5 +1,0 @@
-- model=L32-1-IT
-- generation=original_prompts
-- time_series=attention_outputs
-- phyid=base
-- deactivation_analysis=reverse_kl

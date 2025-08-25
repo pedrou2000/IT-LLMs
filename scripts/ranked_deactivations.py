@@ -26,6 +26,7 @@ def main(cfg: DictConfig) -> None:
         torch_dtype=torch.float16, 
         device_map="auto",
         trust_remote_code=True,
+        attn_implementation='eager',  
     )
     model.eval()                    # ← puts *every* sub‑module in eval mode
     torch.set_grad_enabled(False)   # optional but avoids autograd bookkeeping
@@ -67,6 +68,7 @@ def main(cfg: DictConfig) -> None:
         reverse_kl=cfg.deactivation_analysis.reverse_kl,
         run_reverse_ranking=cfg.deactivation_analysis.run_reverse_ranking,
         noise_std=cfg.deactivation_analysis.noise_std,
+        data_deactivation_dir=cfg.paths.data_deactivation_dir,
     )
     
     for fraction in cfg.deactivation_analysis.fractions_plot:

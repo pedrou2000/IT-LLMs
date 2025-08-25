@@ -23,6 +23,10 @@ from src.activation_recorder.modules import MLPLayerActivations
 from src.activation_recorder.modules import MoEExpertActivations
 
 
+def _own(x: torch.Tensor) -> torch.Tensor:
+    # make an owning, independent copy (not a view, not aliasing graph buffers)
+    return x.detach().contiguous().clone()
+
 class ActivationRecorder:
     """
     Demonstration of bottom-up recording approach.
@@ -111,7 +115,7 @@ class ActivationRecorder:
             # Force cache reset (important)
             inputs["past_key_values"] = None  # Explicitly reset cache
             self.model._past = None  # Reset KV-cache
-            torch.cuda.empty_cache()  # Optional: Free GPU memory
+            # torch.cuda.empty_cache()  # Optional: Free GPU memory
             
             # Single call to .generate(...) with caching
             with torch.no_grad():
@@ -177,8 +181,6 @@ class ActivationRecorder:
             head_activations = self._create_head_activations(activations, layer_idx, head_idx)
             attn.add_head_activations(head_activations)
         
-
-    
     def _includes_prompt_activations(self, activations, dim=-2):
         for key, value in activations.items():
             if hasattr(value, 'shape') and value.shape[dim] > 1:
@@ -216,17 +218,23 @@ class ActivationRecorder:
             activations[key] = self._slice_tensor_along_dim(value, dim=dim)
         return activations
 
-    
+
     def _create_head_activations(self, activations, layer_idx, head_idx):
+        q  = _own(activations['queries'][:, head_idx, :, :]).squeeze(0)   # if B==1 squeeze batch; adjust as you like
+        aw = activations['attention_weights']
+        aw = _own(aw[:, head_idx, :, :]).squeeze(0) if aw is not None else None
+        ao = _own(activations['attention_outputs'][:, head_idx, :, :]).squeeze(0)
+        po = _own(activations['projected_outputs'][:, head_idx, :, :]).squeeze(0)
         return AttentionHeadActivations(
-            query=activations['queries'][:, head_idx, :, :].squeeze().cpu(),
-            attention_weights=activations['attention_weights'][:, head_idx, :, :].squeeze().cpu(),
-            attention_outputs=activations['attention_outputs'][:, head_idx, :, :].squeeze().cpu(),
-            projected_outputs=activations['projected_outputs'][:, head_idx, :, :].squeeze().cpu(),
+            query=q,
+            attention_weights=aw,
+            attention_outputs=ao,
+            projected_outputs=po,
             model_info=self.model_info,
             layer_index=layer_idx,
-            head_index=head_idx
+            head_index=head_idx,
         )
+
 
     def _mlp_hook_fn(self, module, module_input, module_output):
         """
@@ -321,9 +329,9 @@ class ActivationRecorder:
                 mlp_output = activations['out_before_mul'][expert_idx_in_weights, :].squeeze()
                 expert_output = activations['out_after_mul'][expert_idx_in_weights, :].squeeze()
                 expert_activations = MoEExpertActivations(
-                    gate_value=gate_value.cpu(),  
-                    mlp_output=mlp_output.cpu(),
-                    expert_output=expert_output.cpu(),
+                    gate_value=gate_value.detach(),  
+                    mlp_output=mlp_output.detach(),
+                    expert_output=expert_output.detach(),
                     model_info=self.model_info,
                     layer_index=layer_idx,
                     expert_index=expert_index

@@ -426,26 +426,47 @@ class PromptPhyID:
 
         return rank
 
-    def plot_syn_minus_red_rank_per_node(self, rank_da, plot_dir: Union[str, None] = None) -> None:
-        """Plot the rank of sources by average (sts - rtr)."""
-        plt.figure(figsize=(10, 6))
-        sns.heatmap(rank_da, annot=True, fmt=".0f", cmap="viridis_r", cbar_kws={"label": "Synergy Minus Redundancy Rank"})
-        plt.title("Synergy–Redundancy Rank (Blue = Synergy, Yellow = Redundancy)")
-        plt.xlabel("Source Node")
-        plt.ylabel("Source Layer")
+    def plot_syn_minus_red_rank_per_node(
+        self,
+        rank_da,
+        plot_dir: Union[str, None] = None,
+        save_svg: bool = False,
+        figsize: tuple = (13, 6),
+    ) -> None:
+        """Plot synergy–redundancy rank heatmap: x = layer, y = node (red = high, blue = low)."""
+        plt.figure(figsize=figsize)
+
+        sns.heatmap(
+            rank_da.T,
+            annot=False,  
+            cmap=sns.color_palette("RdBu_r", as_cmap=True),
+            cbar_kws={"label": "Synergy Minus Redundancy Rank"},
+        )
+
+        # plt.title("Synergy–Redundancy Rank (Red = High Synergy, Blue = High Redundancy)")
+        plt.xlabel("Layer")
+        plt.ylabel("Attention Head")
         plt.tight_layout()
-        
+
         if plot_dir:
             plot_dir = os.path.join(plot_dir, "syn_minus_red_rank")
-            if not os.path.exists(plot_dir):
-                os.makedirs(plot_dir, exist_ok=True)
-            save_file = os.path.join(plot_dir, "rank_plot.png")
-            plt.savefig(save_file, dpi=300)
+            os.makedirs(plot_dir, exist_ok=True)
+
+            png_path = os.path.join(plot_dir, "rank_plot.png")
+            plt.savefig(png_path, dpi=300)
+            print(f"PNG saved to {png_path}")
+
+            if save_svg:
+                svg_path = os.path.join(plot_dir, "rank_plot.svg")
+                plt.savefig(svg_path, format="svg")
+                print(f"SVG saved to {svg_path}")
+
             plt.close()
-            print(f"Plot saved to {save_file}")
         else:
             plt.show()
-        plt.close()
+            plt.close()
+
+
 
     def plot_syn_minus_red_rank_per_layer(self, rank_da, *, plot_dir: Union[str, None] = None) -> None:  
         """Line‑and‑dot plot of 0–1‑normalized (sts−rtr) per layer (higher = more synergistic)."""
@@ -535,18 +556,19 @@ class PromptPhyID:
             .stack(source=("source_layer", "source_node"))
             .stack(target=("target_layer", "target_node"))
         )
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(4.75, 4))
         sns.heatmap(a, cmap="viridis")
-        plt.title(f"Mean {atom.upper()} information flow (source → target)")
-        plt.xlabel("Target node")
-        plt.ylabel("Source node")
+        # plt.title(f"Mean {atom.upper()} information flow (source → target)")
+        plt.xlabel("Target Attention Head")
+        plt.ylabel("Source Attention Head")
         plt.tight_layout()
         if plot_dir:
             plot_dir = os.path.join(plot_dir, f"node_heatmap/{atom}")
             if not os.path.exists(plot_dir):
                 os.makedirs(plot_dir, exist_ok=True)
-            save_file = os.path.join(plot_dir, "heatmap.png")
-            plt.savefig(save_file, dpi=300)
+            save_file = os.path.join(plot_dir, "heatmap.svg")
+            # plt.savefig(save_file, dpi=300)
+            plt.savefig(save_file, format="svg")
             plt.close()
             print(f"Heatmap saved to {save_file}")
         else:

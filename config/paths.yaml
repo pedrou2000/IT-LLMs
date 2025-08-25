@@ -17,9 +17,7 @@ paths:
   data_phyid_file: ${paths.data_phyid_dir}multi_prompt_phyid.pkl
   data_phyid_file_data_array: ${paths.data_phyid_dir}multi_prompt_phyid.nc
 
-  data_deactivation_dir: ${paths.data_dir}deactivation/
-  data_deactivation_file: ${paths.data_deactivation_dir}ranked/${paths.phyid_method}${paths.deactivation_method}multi_prompt_deactivation.pkl
-  data_random_deactivation_runs: ${paths.data_deactivation_dir}random/${paths.deactivation_method}
+  data_deactivation_dir: ${paths.data_dir}deactivation/ranked/${paths.phyid_method}${paths.deactivation_method}
 
   # plot directories
   plot_dir: ${paths.project_root}plots/${paths.model_path}${generation.name}/

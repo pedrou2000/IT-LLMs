@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import multiprocessing as mp
 import sys, os
+os.environ["TORCHDYNAMO_DISABLE"] = "1"
 from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf

@@ -46,7 +46,15 @@ class ModuleDeactivator:
 
     @staticmethod
     def deactivate_mlp(module: nn.Module, nodes: List[int], noise_std: Optional[float] = None):
-        raise NotImplementedError()
+        """
+        Deactivate self-attention experts in the module by setting their weights to zero.
+        
+        :param module: The MoE module to modify.
+        :param nodes: List of node indices (experts) to deactivate.
+        """
+        if not hasattr(module, 'set_deactivated_experts'):
+            raise ValueError("Module does not support deactivation. Implement `set_deactivated_heads`.")
+        module.set_deactivated_experts(nodes)
     
     @staticmethod
     def deactivate_selected_nodes(module: nn.Module, nodes: List[int], module_type: str = "self_attn", noise_std: Optional[float] = None):
@@ -88,9 +96,9 @@ def deactivate_model_parts(
             continue
         
         module = modules_to_deactivate[layer_idx]
-        if not hasattr(module, 'head_dim'):
-            print(f"Warning: Module {module} does not have 'head_dim' attribute. Cannot proceed with deactivation.")
-            continue
+        # if not hasattr(module, 'head_dim'):
+            # print(f"Warning: Module {module} does not have 'head_dim' attribute. Cannot proceed with deactivation.")
+            # continue
 
         ModuleDeactivator.deactivate_selected_nodes(
             module=module,
@@ -109,6 +117,8 @@ def deactivate_model_parts(
             module = modules_to_deactivate[layer_idx]
             if hasattr(module, 'clear_deactivated_heads'):
                 module.clear_deactivated_heads()
+            if hasattr(module, 'clear_deactivated_experts'):
+                module.clear_deactivated_experts()
             elif hasattr(module, 'deactivated_heads'):
                 module.deactivated_heads = []
             else:

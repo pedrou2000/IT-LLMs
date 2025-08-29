@@ -224,8 +224,9 @@ class MultiPromptPhyID:
 
         for prompt in self.prompts.values():
             print(f"Processing prompt {n+1}/{len(self.prompts)}...", flush=True)
-            da = prompt.build_data_array().astype(dtype)   # one prompt in RAM
-            da = da.mean(dim=["time"])
+            da = prompt.data_array.astype(dtype)   # one prompt in RAM
+            # da = prompt.build_data_array().astype(dtype)   # one prompt in RAM
+            # da = da.mean(dim=["time"])
             print(f"Shape of data array for prompt {n+1}: {da.shape}", flush=True)
             # running_sum = da.copy(deep=True) if running_sum is None else running_sum + da
             running_sum = da if running_sum is None else running_sum + da
@@ -270,7 +271,7 @@ class MultiPromptPhyID:
         if save_dir_path:
             self.save_averarge_prompt_phyid(dir_path=save_dir_path)
 
-        print(f"Length of average PromptPhyID: {len(out.phyid[(1, 1, 1, 1)].sts)}", flush=True)
+        # print(f"Length of average PromptPhyID: {len(out.phyid[(1, 1, 1, 1)].sts)}", flush=True)
 
         return out
 

@@ -1,0 +1,10 @@
+# Auto-generated model config for G3-1
+shortcode: 'G3-1-IT'
+hf_name: 'google/gemma-3-1b-it'
+company: 'google'
+model_family: 'gemma-3'
+model_size: '1B'
+it: 'instruct'
+plot_name: 'Gemma 3 1B Instruct'
+color: '#647c00'
+apply_chat_template: 'chat'

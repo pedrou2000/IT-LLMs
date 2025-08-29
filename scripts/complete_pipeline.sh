@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # Manually hardcoded values (safe to edit before submission)
-MODEL="G3-1"                               # L32-1, D2-16-A2, P-1
+MODEL="D2-16-A2"                               # L32-1, D2-16-A2, P-1
 GENERATION="original_prompts"              # subset, original_prompts
-TIME_SERIES="attention_outputs"            # attention_outputs, expert_output
-PHYID="base"                               # discrete
+TIME_SERIES="expert_output"            # attention_outputs, expert_output
+PHYID="discrete"                               # discrete
 DEACTIVATION_ANALYSIS="base"         # reverse_kl, noisy
 
 # Which scripts to run (set to true or false)
-RUN_RECORD_ACTIVATIONS=true
-RUN_TIME_SERIES=true
+RUN_RECORD_ACTIVATIONS=false
+RUN_TIME_SERIES=false
 RUN_RANKED_DEACTIVATIONS=true
 
 # GPU Partition 
@@ -32,7 +32,7 @@ cat > "$JOB_SCRIPT" <<EOF
 #SBATCH --gres=gpu:h200:1
 
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate intn
+conda activate int_deepseek
 export HF_ALLOW_CODE_EVAL=1
 
 echo "Working directory: \$(pwd)"

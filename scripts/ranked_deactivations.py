@@ -58,6 +58,7 @@ def main(cfg: DictConfig) -> None:
             chat_template=cfg.model.apply_chat_template,
             node_ranking=node_ranking,
             max_new_tokens=cfg.generation.max_new_tokens,
+            deactivated_module_name="mlp" if cfg.time_series.node_type=="moe" else "self_attn",
         )
     )
     experiment.run_default_and_random(

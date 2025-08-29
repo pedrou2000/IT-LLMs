@@ -102,7 +102,8 @@ class RankedDeactivationAnalysis:
     def __init__(
         self, model: AutoModelForCausalLM, tokenizer: AutoTokenizer, prompts: Union[List[str], List[List[str]]], chat_template: str,
         node_ranking: xr.DataArray, # dims ('source_layer', 'source_node'), values are node ranks
-        max_new_tokens: int = 128
+        max_new_tokens: int = 128,
+        deactivated_module_name: str = "self_attn" # "self_attn", "mlp", "moe", ...
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -113,6 +114,7 @@ class RankedDeactivationAnalysis:
         # random.shuffle(self.node_ranking)
 
         self.max_new_tokens = max_new_tokens
+        self.deactivated_module_name = deactivated_module_name
 
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -212,7 +214,7 @@ class RankedDeactivationAnalysis:
         micro_batch_size: int = 32, 
         save_file_path: str = None,
         reverse_kl: bool = False,
-        noise_std: Optional[float] = None
+        noise_std: Optional[float] = None,
     ) -> RankedDeactivationResults:
         """
         Run the ranked deactivation analysis on the model with the given prompts.
@@ -258,7 +260,7 @@ class RankedDeactivationAnalysis:
             with deactivate_model_parts(
                 model=self.model,
                 nodes_to_deactivate=nodes_to_deactivate,
-                module_name="self_attn",  # "self_attn", "mlp", etc.
+                module_name=self.deactivated_module_name, # "self_attn", "mlp", "moe", ...
                 noise_std=noise_std # Optional noise standard deviation for deactivation
 
             ) as deactivated_model:

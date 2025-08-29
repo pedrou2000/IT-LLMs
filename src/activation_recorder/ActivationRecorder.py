@@ -13,6 +13,7 @@ import torch
 from typing import List, Optional, Dict
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from IPython.core.debugger import Pdb
+import torch._dynamo as dynamo
 
 from src.utils import ModelInformation, apply_prompt_template
 from src.activation_recorder.MultiPromptActivations import MultiPromptActivations
@@ -87,7 +88,7 @@ class ActivationRecorder:
             h.remove()
         self._hooks = []
     
-
+    @dynamo.disable
     def record_prompts(self, prompts: List[str] | Dict[str, List[str]] = None, max_new_tokens: int = 20, prompt_template: str = 'no') -> MultiPromptActivations:
         """
         Runs autoregressive generation for each prompt and collects intermediate activations

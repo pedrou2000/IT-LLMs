@@ -46,6 +46,110 @@ from src.activation_recorder import ActivationRecorder, MultiPromptActivations
 from src.time_series_activations import MultiPromptTimeSeries
 from src.phyid_decomposition import MultiPromptPhyID
 
+def _heatmap_synred_vs_step(
+    curves: dict[int, tuple[np.ndarray, np.ndarray]],
+    plot_dir: Union[str, None],
+    title: str = "Synergy–redundancy rank across training",
+    fname: str = "syn_minus_red_heatmap.png",
+    data_fname: str = "syn_minus_red_heatmap.nc",
+) -> None:
+    """
+    Build a (n_layers × n_steps) matrix from `curves` and plot a heatmap.
+
+    curves: step -> (layers_x, values_y) with values in [0, 1] (your current normalisation).
+            Red = high (synergy), Blue = low (redundancy).
+    """
+    if not curves:
+        print("[heatmap] nothing to plot")
+        return
+
+    # Sort steps for consistent left→right ordering
+    steps_sorted = sorted(curves.keys())
+    # Assume all checkpoints use the same layer indexing (they should)
+    ref_layers = curves[steps_sorted[0]][0]
+    n_layers = len(ref_layers)
+
+    # Build matrix H[layer, step_idx]
+    H = np.zeros((n_layers, len(steps_sorted)), dtype=np.float32)
+    for j, step in enumerate(steps_sorted):
+        xs, ys = curves[step]
+        # Safety: verify layers line up; if not, realign by index
+        if len(xs) != n_layers or not np.all(xs == ref_layers):
+            # Fallback: map by layer id → value
+            val_by_layer = {int(x): float(y) for x, y in zip(xs, ys)}
+            H[:, j] = [val_by_layer.get(int(l), np.nan) for l in ref_layers]
+        else:
+            H[:, j] = ys
+
+    # Optional: if any NaNs crept in, fill with column means
+    if np.isnan(H).any():
+        col_means = np.nanmean(H, axis=0)
+        inds = np.where(np.isnan(H))
+        H[inds] = np.take(col_means, inds[1])
+
+    plt.figure(figsize=(12, 7))
+    # RdBu_r → blue = low, red = high
+    im = plt.imshow(
+        H,
+        origin="lower",              # layer 0 at bottom
+        aspect="auto",
+        cmap="RdBu_r",
+        vmin=0.0, vmax=1.0,          # your [0,1] normalisation
+    )
+    cbar = plt.colorbar(im)
+    cbar.set_label("Normalised (synergy − redundancy) rank", rotation=90)
+
+    # X ticks at a manageable count
+    from matplotlib.ticker import MaxNLocator
+    ax = plt.gca()
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+    ax.set_xticks(range(len(steps_sorted)))
+    ax.set_xticklabels([f"{s:,}" for s in steps_sorted], rotation=45, ha="right")
+
+    # Y ticks: show every k-th layer to avoid clutter
+    k = max(1, n_layers // 20)
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=min(20, n_layers)))
+    ax.set_yticks(range(0, n_layers, k))
+    ax.set_yticklabels([str(int(l)) for l in ref_layers[::k]])
+
+    plt.xlabel("Training step")
+    plt.ylabel("Source layer")
+    plt.title(title)
+    plt.tight_layout()
+
+    out_dir = None
+    if plot_dir:
+        out_dir = os.path.join(plot_dir, "checkpoint_comparison")
+        os.makedirs(out_dir, exist_ok=True)
+        fpath = os.path.join(out_dir, fname)
+        plt.savefig(fpath, dpi=300)
+        print(f"→ saved heatmap to {fpath}")
+        plt.close()
+    else:
+        plt.show()
+
+    # Also persist the matrix as an xarray DataArray
+    try:
+        da = xr.DataArray(
+            H,
+            dims=("source_layer", "training_step"),
+            coords={
+                "source_layer": ref_layers,
+                "training_step": steps_sorted,
+            },
+            name="syn_minus_red_norm",
+            attrs={"desc": "Normalised (synergy − redundancy) rank"},
+        )
+        if plot_dir:
+            data_path = os.path.join(out_dir, data_fname)
+        else:
+            data_path = data_fname
+        da.to_netcdf(data_path)
+        print(f"→ saved heatmap data to {data_path}")
+    except Exception as e:
+        print(f"[warning] could not save heatmap data: {e}")
+
+
 
 def _overlay_plot(
         curves: dict[int, tuple[np.ndarray, np.ndarray]],
@@ -153,7 +257,7 @@ def plot_for_checkpoints(
             cfg = OmegaConf.create(base_cfg)
             cfg.model.revision = f"step{step}"
             cfg.model.shortcode = f"P-1-{step}"
-            cfg.model.it = f"base-{step}"
+            cfg.model.it = f"base/steps/base-{step}"
 
             phyid = MultiPromptPhyID.load_average_prompt_phyid(dir_path=cfg.paths.data_phyid_dir)
             phyid.build_data_array()
@@ -226,6 +330,16 @@ def plot_for_checkpoints(
         _plot_synergy_vs_step(
             total_synergy,
             plot_dir=cfg.paths.plot_synergy_through_training_dir,
+        )
+    
+    # --- NEW: heatmap of (synergy − redundancy) rank across steps -------------
+    if synred_curves:
+        _heatmap_synred_vs_step(
+            synred_curves,
+            plot_dir=cfg.paths.plot_synergy_through_training_dir,
+            title="Synergy–redundancy rank per layer across training",
+            fname="syn_minus_red_heatmap.png",
+            data_fname="syn_minus_red_heatmap.nc",
         )
 
 

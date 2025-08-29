@@ -28,6 +28,7 @@ class ModelInformation:
             return  # Allows dummy construction for from_dict
 
         config = hf_model.config
+        print(config)
         self.model_architecture = config.architectures[0] if getattr(config, "architectures", []) else ""
         self.model_name = getattr(config, "name_or_path", "")
         self.num_layers = getattr(config, "num_hidden_layers", getattr(config, "n_layer", 0))

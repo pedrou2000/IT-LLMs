@@ -398,6 +398,31 @@ class PromptPhyID:
 
         return rank_da
 
+    @property
+    def syn_minus_red_duplets(self) -> list[tuple[int, int]]:
+        """
+        Ordered list of (source_layer, source_node) duplets ranked by
+        descending (synergy − redundancy).
+
+        Returns
+        -------
+        list[tuple[int, int]]
+            First element ⇒ highest rank
+            Last element  ⇒ lowest rank
+        """
+        rank_da = self.syn_minus_red_rank
+
+        # Flatten into a table of (layer, node, rank)
+        df = rank_da.stack(pair=("source_layer", "source_node")).to_dataframe("rank")
+
+        # Sort by rank ascending (1 = best, N = worst)
+        df_sorted = df.sort_values("rank", ascending=False)
+
+        # Extract the list of duplets
+        duplets = list(df_sorted.index.values)  # each index is (layer, node)
+
+        return duplets
+
     @cached_property
     def syn_rank_minus_red_rank(self) -> np.ndarray:
         """Ranks sources by average (sts - rtr), aggregated over target and time."""
